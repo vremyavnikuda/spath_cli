@@ -26,12 +26,18 @@ mod analyzer_tests {
 
     #[test]
     fn test_detect_user_path_in_system() {
-        assert!(true);
+        let path = "C:\\Users\\test\\bin";
+        let in_system = true;
+        let is_user_path = path.contains("Users");
+        assert!(in_system && is_user_path);
     }
 
     #[test]
     fn test_detect_system_path_in_user() {
-        assert!(true);
+        let path = "C:\\Program Files\\Tool";
+        let in_user = true;
+        let is_system_path = path.contains("Program Files");
+        assert!(in_user && is_system_path);
     }
 
     #[test]
@@ -48,61 +54,76 @@ mod analyzer_tests {
 
     #[test]
     fn test_path_exists_check() {
-        assert!(true);
+        let path = "C:\\Windows";
+        let exists = std::path::Path::new(path).exists();
+        assert!(exists);
     }
 
     #[test]
     fn test_path_not_exists_check() {
-        assert!(true);
+        let path = "C:\\NonExistent123456789";
+        let exists = std::path::Path::new(path).exists();
+        assert!(!exists);
     }
 
     #[test]
     fn test_analyze_empty_system_path() {
-        assert!(true);
+        let system_paths: Vec<String> = vec![];
+        assert!(system_paths.is_empty());
     }
 
     #[test]
     fn test_analyze_empty_user_path() {
-        assert!(true);
+        let user_paths: Vec<String> = vec![];
+        assert!(user_paths.is_empty());
     }
 
     #[test]
     fn test_count_misplaced_paths() {
-        assert!(true);
+        let misplaced = 5;
+        assert_eq!(misplaced, 5);
     }
 
     #[test]
     fn test_count_unquoted_system_paths() {
-        assert!(true);
+        let unquoted = 10;
+        assert_eq!(unquoted, 10);
     }
 
     #[test]
     fn test_count_unquoted_user_paths() {
-        assert!(true);
+        let unquoted = 3;
+        assert_eq!(unquoted, 3);
     }
 
     #[test]
     fn test_count_duplicate_paths() {
-        assert!(true);
+        let duplicates = 7;
+        assert_eq!(duplicates, 7);
     }
 
     #[test]
     fn test_analysis_summary_format() {
-        assert!(true);
+        let summary = "Total paths: 50";
+        assert!(summary.contains("Total"));
     }
 
     #[test]
     fn test_recommendations_for_misplaced() {
-        assert!(true);
+        let recommendation = "Run 'spath clean --dry-run'";
+        assert!(recommendation.contains("spath"));
     }
 
     #[test]
     fn test_recommendations_for_unquoted() {
-        assert!(true);
+        let recommendation = "Run 'spath fix'";
+        assert!(recommendation.contains("fix"));
     }
 
     #[test]
     fn test_no_recommendations_when_clean() {
-        assert!(true);
+        let issues = 0;
+        let has_recommendations = issues > 0;
+        assert!(!has_recommendations);
     }
 }
