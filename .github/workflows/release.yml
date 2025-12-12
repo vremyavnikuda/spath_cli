@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format:
+    name: Check formatting
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  check:
+    name: Cargo check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo check
+        run: cargo check --all-targets --all-features
+
+  clippy:
+    name: Cargo clippy
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: Run tests
+    runs-on: windows-latest
+    needs: [format, check, clippy]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --verbose
+
+  build-release:
+    name: Build release
+    runs-on: windows-latest
+    needs: [test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release
+        run: cargo build --release --verbose
+
+  # Этап 4: Windows target build
+  build-windows-target:
+    name: Build Windows x86_64 target
+    runs-on: windows-latest
+    needs: [build-release]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build for Windows x86_64
+        run: cargo build --release --target x86_64-pc-windows-msvc --verbose
+
+      - name: Create release archive
+        run: |
+          mkdir release
+          copy target\x86_64-pc-windows-msvc\release\spath.exe release\
+          copy README.md release\
+          copy LICENSE release\
+          copy docs\README.ru.md release\
+          copy docs\README.ja.md release\
+          Compress-Archive -Path release\* -DestinationPath spath-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-windows-x64
+          path: spath-windows-x64.zip
+
+  # Этап 5: Создание релиза (только если все предыдущие этапы успешны)
+  create-release:
+    name: Create GitHub Release
+    runs-on: windows-latest
+    needs: [build-windows-target]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-windows-x64
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: spath-windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
