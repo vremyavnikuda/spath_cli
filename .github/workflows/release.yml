@@ -80,7 +80,6 @@ jobs:
       - name: Build release
         run: cargo build --release --verbose
 
-  # Этап 4: Windows target build
   build-windows-target:
     name: Build Windows x86_64 target
     runs-on: windows-latest
@@ -113,7 +112,6 @@ jobs:
           name: spath-windows-x64
           path: spath-windows-x64.zip
 
-  # Этап 5: Создание релиза (только если все предыдущие этапы успешны)
   create-release:
     name: Create GitHub Release
     runs-on: windows-latest

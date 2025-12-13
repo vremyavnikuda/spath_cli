@@ -1,0 +1,23 @@
+{
+    "version": "0.1.0",
+    "description": "Windows PATH security scanner and fixer - detects and fixes unquoted paths with spaces",
+    "homepage": "https://github.com/vremyavnikuda/spath",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/vremyavnikuda/spath/releases/download/v0.1.0/spath.exe",
+            "hash": "sha256:REPLACE_WITH_ACTUAL_HASH"
+        }
+    },
+    "bin": "spath.exe",
+    "checkver": {
+        "github": "https://github.com/vremyavnikuda/spath"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/vremyavnikuda/spath/releases/download/v$version/spath.exe"
+            }
+        }
+    }
+}

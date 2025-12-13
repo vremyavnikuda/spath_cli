@@ -2,9 +2,21 @@
 name = "spath"
 version = "0.1.0"
 edition = "2021"
-authors = ["spath Contributors"]
-description = "A Windows PATH security scanner and fixer"
+authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
+description = "A Windows PATH security scanner and fixer - detects and fixes unquoted paths with spaces"
 license = "MIT"
+repository = "https://github.com/vremyavnikuda/spath"
+homepage = "https://github.com/vremyavnikuda/spath"
+documentation = "https://github.com/vremyavnikuda/spath"
+readme = "README.md"
+keywords = ["windows", "path", "security", "cli", "scanner"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    "target/",
+    ".git/",
+    ".github/",
+    "tests/",
+]
 
 [dependencies]
 anyhow = "1.0"
