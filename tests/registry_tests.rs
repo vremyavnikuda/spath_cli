@@ -68,28 +68,28 @@ mod parse_tests {
 mod join_tests {
     #[test]
     fn test_join_paths() {
-        let paths = vec!["C:\\Windows".to_string(), "C:\\System32".to_string()];
+        let paths = ["C:\\Windows".to_string(), "C:\\System32".to_string()];
         let joined = paths.join(";");
         assert_eq!(joined, "C:\\Windows;C:\\System32");
     }
 
     #[test]
     fn test_join_empty_paths() {
-        let paths: Vec<String> = vec![];
+        let paths: [String; 0] = [];
         let joined = paths.join(";");
         assert_eq!(joined, "");
     }
 
     #[test]
     fn test_join_single_path() {
-        let paths = vec!["C:\\Windows".to_string()];
+        let paths = ["C:\\Windows".to_string()];
         let joined = paths.join(";");
         assert_eq!(joined, "C:\\Windows");
     }
 
     #[test]
     fn test_join_many_paths() {
-        let paths = vec![
+        let paths = [
             "C:\\Windows".to_string(),
             "C:\\System32".to_string(),
             "C:\\Tools".to_string(),
