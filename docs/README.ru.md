@@ -110,4 +110,4 @@ spath restore <файл-резервной-копии> --delicate
 
 ## Лицензия
 
-MIT License
+MIT License - см. файл [LICENSE](../LICENSE)

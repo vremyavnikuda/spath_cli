@@ -110,4 +110,4 @@ spath restore <バックアップファイル> --delicate
 
 ## ライセンス
 
-MIT License
+MIT License - [LICENSE](../LICENSE)ファイルを参照
