@@ -1,5 +1,7 @@
 # spath
 
+![spath banner](img/1765746905745-019b1eb7-0a53-7269-9766-481e69cf3b4e.png)
+
 **Languages:** [Русский](docs/README.ru.md) | [日本語](docs/README.ja.md)
 
 Windows PATH security scanner and optimizer.

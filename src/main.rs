@@ -5,11 +5,14 @@ use std::io::{self, Write};
 
 mod analyzer;
 mod fixer;
+mod formatter;
 mod migrator;
+mod registry;
 mod scanner;
 
 use analyzer::SystemAnalyzer;
 use fixer::PathFixer;
+use formatter::ConsoleFormatter;
 use migrator::PathMigrator;
 use scanner::PathScanner;
 
@@ -99,26 +102,23 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Scan { verbose, audit } => {
             println!("{}", "spath - Windows PATH Security Scanner".bold().cyan());
-            println!("{}", "=".repeat(50).cyan());
             println!();
 
             let scanner = PathScanner::new()?;
             let results = scanner.scan()?;
 
-            results.print(verbose);
+            ConsoleFormatter::print_scan_results(&results, verbose);
 
             println!();
-            println!("{}", "=".repeat(50).cyan());
-            results.print_summary();
+            ConsoleFormatter::print_scan_summary(&results);
 
             if audit {
-                results.print_audit();
+                ConsoleFormatter::print_scan_audit(&results);
             }
         }
 
         Commands::Fix { dry_run, delicate } => {
             println!("{}", "spath - PATH Fixer".bold().cyan());
-            println!("{}", "=".repeat(50).cyan());
             println!();
 
             if dry_run {
@@ -148,12 +148,11 @@ fn main() -> Result<()> {
 
             let results = fixer.fix_user_path(dry_run)?;
 
-            results.print();
+            ConsoleFormatter::print_fix_results(&results);
         }
 
         Commands::Backup => {
             println!("{}", "spath - Create Backup".bold().cyan());
-            println!("{}", "=".repeat(50).cyan());
             println!();
 
             let fixer = PathFixer::new()?;
@@ -162,7 +161,6 @@ fn main() -> Result<()> {
 
         Commands::ListBackups => {
             println!("{}", "spath - Available Backups".bold().cyan());
-            println!("{}", "=".repeat(50).cyan());
             println!();
 
             let fixer = PathFixer::new()?;
@@ -174,7 +172,7 @@ fn main() -> Result<()> {
                 println!("Found {} backup(s):", backups.len());
                 println!();
                 for backup in backups {
-                    println!("  • {}", backup.display());
+                    println!("  {}", backup.display());
                 }
             }
         }
@@ -184,7 +182,6 @@ fn main() -> Result<()> {
             delicate,
         } => {
             println!("{}", "spath - Restore Backup".bold().cyan());
-            println!("{}", "=".repeat(50).cyan());
             println!();
 
             let fixer = PathFixer::new()?;
@@ -206,13 +203,12 @@ fn main() -> Result<()> {
 
         Commands::Analyze => {
             println!("{}", "spath - System PATH Analyzer".bold().cyan());
-            println!("{}", "=".repeat(70).cyan());
             println!();
 
             let analyzer = SystemAnalyzer::new()?;
             let results = analyzer.analyze()?;
 
-            results.print();
+            ConsoleFormatter::print_analysis_results(&results);
         }
 
         Commands::Clean {
@@ -221,7 +217,6 @@ fn main() -> Result<()> {
             delicate,
         } => {
             println!("{}", "spath - PATH Cleanup".bold().cyan());
-            println!("{}", "=".repeat(70).cyan());
             println!();
 
             if dry_run {
@@ -237,7 +232,7 @@ fn main() -> Result<()> {
             let migrator = PathMigrator::new()?;
             let plan = migrator.plan_migration(true, system)?;
 
-            plan.print(dry_run);
+            ConsoleFormatter::print_migration_plan(&plan, dry_run);
 
             if !dry_run && !plan.actions.is_empty() {
                 println!();
@@ -253,7 +248,7 @@ fn main() -> Result<()> {
 
                 migrator.execute_migration(&plan, dry_run)?;
                 println!();
-                println!("{}", "✓ Cleanup completed!".green().bold());
+                println!("{}", "Cleanup completed.".green().bold());
                 println!(
                     "{}",
                     "  Note: You may need to restart applications for changes to take effect."

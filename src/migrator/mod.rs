@@ -2,10 +2,9 @@ use anyhow::{Context, Result};
 use colored::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use winreg::enums::*;
-use winreg::RegKey;
 
 use crate::analyzer::{PathCategory, PathEntry, PathLocation, SystemAnalyzer};
+use crate::registry::RegistryHelper;
 
 #[derive(Debug, Clone)]
 pub struct MigrationAction {
@@ -167,7 +166,7 @@ impl PathMigrator {
         if plan.requires_admin {
             println!(
                 "{}",
-                "⚠ This migration requires administrator rights!"
+                "This migration requires administrator rights!"
                     .yellow()
                     .bold()
             );
@@ -218,7 +217,7 @@ impl PathMigrator {
         if !system_removals.is_empty() {
             match self.update_system_path(&system_removals) {
                 Ok(_) => {
-                    println!("{}", "✓ SYSTEM PATH updated successfully".green().bold());
+                    println!("{}", "SYSTEM PATH updated successfully".green().bold());
                 }
                 Err(e) => {
                     println!(
@@ -247,11 +246,8 @@ impl PathMigrator {
             .backup_dir
             .join(format!("path_backup_{}.json", timestamp));
 
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu.open_subkey("Environment")?;
-        let user_path: String = env_key.get_value("Path")?;
-
-        let system_path = self.read_system_path().ok();
+        let user_path = RegistryHelper::read_user_path_raw()?;
+        let system_path = RegistryHelper::read_system_path_raw().ok();
 
         let backup = serde_json::json!({
             "timestamp": timestamp,
@@ -262,7 +258,7 @@ impl PathMigrator {
         std::fs::write(&backup_file, serde_json::to_string_pretty(&backup)?)?;
         println!(
             "{} {}",
-            "✓ Backup created:".green().bold(),
+            "Backup created:".green().bold(),
             backup_file.display()
         );
         println!();
@@ -270,25 +266,9 @@ impl PathMigrator {
         Ok(())
     }
 
-    fn read_system_path(&self) -> Result<String> {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let env_key =
-            hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")?;
-        env_key
-            .get_value("Path")
-            .context("Failed to read system PATH")
-    }
-
     fn update_user_path(&self, removals: &[String], additions: &[String]) -> Result<()> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu.open_subkey("Environment")?;
-        let current_path: String = env_key.get_value("Path")?;
-
-        let mut paths: Vec<String> = current_path
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect();
+        let current_path = RegistryHelper::read_user_path_raw()?;
+        let mut paths = RegistryHelper::parse_path_string(&current_path);
 
         // Remove paths
         let removals_normalized: HashSet<String> = removals
@@ -304,30 +284,17 @@ impl PathMigrator {
         // Add new paths
         paths.extend(additions.iter().cloned());
 
-        let new_path = paths.join(";");
+        let new_path = RegistryHelper::join_paths(&paths);
+        RegistryHelper::write_user_path(&new_path)?;
 
-        let env_key = hkcu.open_subkey_with_flags("Environment", KEY_WRITE)?;
-        env_key.set_value("Path", &new_path)?;
-
-        println!("{}", "✓ USER PATH updated successfully".green().bold());
+        println!("{}", "USER PATH updated successfully".green().bold());
 
         Ok(())
     }
 
     fn update_system_path(&self, removals: &[String]) -> Result<()> {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let env_key = hklm.open_subkey_with_flags(
-            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
-            KEY_READ | KEY_WRITE,
-        )?;
-
-        let current_path: String = env_key.get_value("Path")?;
-
-        let mut paths: Vec<String> = current_path
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect();
+        let current_path = RegistryHelper::read_system_path_raw()?;
+        let mut paths = RegistryHelper::parse_path_string(&current_path);
 
         // Remove paths
         let removals_normalized: HashSet<String> = removals
@@ -340,8 +307,8 @@ impl PathMigrator {
             !removals_normalized.contains(&normalized)
         });
 
-        let new_path = paths.join(";");
-        env_key.set_value("Path", &new_path)?;
+        let new_path = RegistryHelper::join_paths(&paths);
+        RegistryHelper::write_system_path(&new_path)?;
 
         Ok(())
     }
@@ -350,98 +317,4 @@ impl PathMigrator {
 pub struct MigrationPlan {
     pub actions: Vec<MigrationAction>,
     pub requires_admin: bool,
-}
-
-impl MigrationPlan {
-    pub fn print(&self, dry_run: bool) {
-        if self.actions.is_empty() {
-            println!(
-                "{}",
-                "✓ No migration needed - PATH is already optimal!"
-                    .green()
-                    .bold()
-            );
-            return;
-        }
-
-        println!("{}", "Migration Plan:".bold().cyan());
-        println!();
-
-        // Count by action type
-        let duplicates_count = self
-            .actions
-            .iter()
-            .filter(|a| matches!(a.action_type, ActionType::RemoveDuplicate))
-            .count();
-
-        let moves_count = self
-            .actions
-            .iter()
-            .filter(|a| matches!(a.action_type, ActionType::MoveToUser))
-            .count();
-
-        // Group by action type for display
-        let duplicates: Vec<_> = self
-            .actions
-            .iter()
-            .filter(|a| matches!(a.action_type, ActionType::RemoveDuplicate))
-            .collect();
-
-        let moves: Vec<_> = self
-            .actions
-            .iter()
-            .filter(|a| matches!(a.action_type, ActionType::MoveToUser))
-            .collect();
-
-        if !duplicates.is_empty() {
-            println!("{}", "🔄 Remove Duplicates:".blue().bold());
-            println!();
-            for action in duplicates {
-                let location = match action.from_location {
-                    PathLocation::System => "SYSTEM",
-                    PathLocation::User => "USER",
-                };
-                println!("  [{}] {}", location.blue(), action.path);
-                println!("      └─ {}", action.reason.dimmed());
-            }
-            println!();
-        }
-
-        if !moves.is_empty() {
-            println!("{}", "📦 Move to USER PATH:".yellow().bold());
-            println!();
-            for action in moves {
-                println!("  [SYSTEM → USER] {}", action.path.yellow());
-                println!("      └─ {}", action.reason.dimmed());
-            }
-            println!();
-        }
-
-        println!("{}", "=".repeat(70).cyan());
-        println!("{}", "Summary:".bold());
-        println!("  Total actions: {}", self.actions.len().to_string().bold());
-        println!("  Duplicates to remove: {}", duplicates_count);
-        println!("  Paths to move: {}", moves_count);
-        println!();
-
-        if self.requires_admin {
-            println!(
-                "{}",
-                "⚠ Administrator rights required for SYSTEM PATH changes"
-                    .yellow()
-                    .bold()
-            );
-            println!();
-        }
-
-        if dry_run {
-            println!(
-                "{}",
-                "This is a DRY RUN - no changes will be made."
-                    .yellow()
-                    .bold()
-            );
-            println!("Run without --dry-run to apply these changes.");
-        }
-    }
 }

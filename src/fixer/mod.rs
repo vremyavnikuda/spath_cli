@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
-use winreg::enums::*;
-use winreg::RegKey;
+use std::path::{Path, PathBuf};
+
+use crate::registry::RegistryHelper;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PathBackup {
@@ -32,17 +32,11 @@ impl PathFixer {
     }
 
     pub fn create_backup(&self) -> Result<PathBuf> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu
-            .open_subkey("Environment")
-            .context("Failed to open HKCU\\Environment")?;
-
-        let user_path: String = env_key
-            .get_value("Path")
+        let user_path = RegistryHelper::read_user_path_raw()
             .context("Failed to read user PATH from registry")?;
 
         // Try to read system PATH (may fail without admin rights)
-        let system_path = self.read_system_path().ok();
+        let system_path = RegistryHelper::read_system_path_raw().ok();
 
         let backup = PathBackup {
             timestamp: chrono::Local::now().format("%Y%m%d_%H%M%S").to_string(),
@@ -59,39 +53,18 @@ impl PathFixer {
 
         println!(
             "{} {}",
-            "✓ Backup created:".green().bold(),
+            "Backup created:".green().bold(),
             backup_file.display()
         );
 
         Ok(backup_file)
     }
 
-    fn read_system_path(&self) -> Result<String> {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let env_key = hklm
-            .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")
-            .context("Failed to open system environment key")?;
-
-        env_key
-            .get_value("Path")
-            .context("Failed to read system PATH")
-    }
-
     pub fn fix_user_path(&self, dry_run: bool) -> Result<FixResults> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu
-            .open_subkey("Environment")
-            .context("Failed to open HKCU\\Environment")?;
-
-        let current_path: String = env_key
-            .get_value("Path")
+        let current_path = RegistryHelper::read_user_path_raw()
             .context("Failed to read user PATH from registry")?;
 
-        let paths: Vec<String> = current_path
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect();
+        let paths = RegistryHelper::parse_path_string(&current_path);
 
         let mut fixed_paths = Vec::new();
         let mut changes = Vec::new();
@@ -125,16 +98,11 @@ impl PathFixer {
             self.create_backup()?;
 
             // Write new PATH to registry
-            let env_key = hkcu
-                .open_subkey_with_flags("Environment", KEY_WRITE)
-                .context("Failed to open HKCU\\Environment for writing")?;
-
-            env_key
-                .set_value("Path", &new_path)
+            RegistryHelper::write_user_path(&new_path)
                 .context("Failed to write new PATH to registry")?;
 
             println!();
-            println!("{}", "✓ PATH has been fixed!".green().bold());
+            println!("{}", "PATH has been fixed.".green().bold());
             println!(
                 "{}",
                 "  Note: You may need to restart applications for changes to take effect.".yellow()
@@ -170,25 +138,69 @@ impl PathFixer {
     }
 
     pub fn restore_backup(&self, backup_file: &PathBuf) -> Result<()> {
+        // Validate backup file path to prevent path traversal attacks
+        self.validate_backup_path(backup_file)?;
+
         let json = fs::read_to_string(backup_file).context("Failed to read backup file")?;
 
         let backup: PathBackup =
             serde_json::from_str(&json).context("Failed to parse backup file")?;
 
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu
-            .open_subkey_with_flags("Environment", KEY_WRITE)
-            .context("Failed to open HKCU\\Environment for writing")?;
-
-        env_key
-            .set_value("Path", &backup.user_path)
+        RegistryHelper::write_user_path(&backup.user_path)
             .context("Failed to restore PATH from backup")?;
 
-        println!("{}", "✓ PATH restored from backup!".green().bold());
+        println!("{}", "PATH restored from backup.".green().bold());
         println!(
             "{}",
             "  Note: You may need to restart applications for changes to take effect.".yellow()
         );
+
+        Ok(())
+    }
+
+    /// Validates that the backup file path is safe to use.
+    /// Prevents path traversal attacks by ensuring:
+    /// 1. File is within the backup directory
+    /// 2. File has .json extension
+    /// 3. File name matches expected pattern
+    fn validate_backup_path(&self, backup_file: &Path) -> Result<()> {
+        use anyhow::bail;
+
+        // Canonicalize paths to resolve any .. or symlinks
+        let canonical_backup_dir = self
+            .backup_dir
+            .canonicalize()
+            .context("Failed to resolve backup directory path")?;
+
+        let canonical_file = backup_file
+            .canonicalize()
+            .context("Backup file does not exist or path is invalid")?;
+
+        // Check that file is within backup directory
+        if !canonical_file.starts_with(&canonical_backup_dir) {
+            bail!(
+                "Security error: Backup file must be located in {}\n\
+                 Use 'spath list-backups' to see available backups.",
+                self.backup_dir.display()
+            );
+        }
+
+        // Check file extension
+        if backup_file.extension().and_then(|s| s.to_str()) != Some("json") {
+            bail!("Security error: Backup file must have .json extension");
+        }
+
+        // Check file name pattern (path_backup_YYYYMMDD_HHMMSS.json)
+        if let Some(file_name) = backup_file.file_name().and_then(|s| s.to_str()) {
+            if !file_name.starts_with("path_backup_") {
+                bail!(
+                    "Security error: Invalid backup file name format.\n\
+                     Expected: path_backup_YYYYMMDD_HHMMSS.json"
+                );
+            }
+        } else {
+            bail!("Security error: Invalid backup file name");
+        }
 
         Ok(())
     }
@@ -198,35 +210,4 @@ pub struct FixResults {
     pub changes: Vec<String>,
     pub dry_run: bool,
     pub changed: bool,
-}
-
-impl FixResults {
-    pub fn print(&self) {
-        if self.changes.is_empty() {
-            println!(
-                "{}",
-                "✓ No issues found - PATH is already clean!".green().bold()
-            );
-            return;
-        }
-
-        println!("{}", "Changes to be applied:".bold());
-        println!();
-
-        for change in &self.changes {
-            println!("  • {}", change);
-        }
-
-        println!();
-
-        if self.dry_run {
-            println!(
-                "{}",
-                "This was a dry run - no changes were made.".yellow().bold()
-            );
-            println!("Run without --dry-run to apply these changes.");
-        } else if self.changed {
-            println!("{}", "✓ Changes applied successfully!".green().bold());
-        }
-    }
 }

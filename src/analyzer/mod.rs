@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
-use colored::*;
 use std::env;
 use std::path::Path;
-use winreg::enums::*;
-use winreg::RegKey;
+
+use crate::registry::RegistryHelper;
 
 #[derive(Debug, Clone)]
 pub enum PathLocation {
@@ -80,37 +79,11 @@ impl SystemAnalyzer {
     }
 
     fn read_system_path(&self) -> Result<Vec<String>> {
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let env_key = hklm
-            .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")
-            .context("Failed to open system environment key. Try running as administrator.")?;
-
-        let path: String = env_key
-            .get_value("Path")
-            .context("Failed to read system PATH")?;
-
-        Ok(path
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect())
+        RegistryHelper::read_system_path()
     }
 
     fn read_user_path(&self) -> Result<Vec<String>> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu
-            .open_subkey("Environment")
-            .context("Failed to open user environment key")?;
-
-        let path: String = env_key
-            .get_value("Path")
-            .context("Failed to read user PATH")?;
-
-        Ok(path
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect())
+        RegistryHelper::read_user_path()
     }
 
     fn analyze_path(&self, path: &str, location: PathLocation) -> PathEntry {
@@ -169,168 +142,4 @@ pub struct AnalysisResults {
     pub entries: Vec<PathEntry>,
     #[allow(dead_code)]
     pub current_username: String,
-}
-
-impl AnalysisResults {
-    pub fn print(&self) {
-        println!("{}", "System PATH Analysis".bold().cyan());
-        println!("{}", "=".repeat(70).cyan());
-        println!();
-
-        // Find misplaced paths
-        let misplaced: Vec<_> = self
-            .entries
-            .iter()
-            .filter(|e| e.should_be_in_user_path())
-            .collect();
-
-        if !misplaced.is_empty() {
-            println!(
-                "{}",
-                "⚠ User Paths in SYSTEM PATH (should be moved):"
-                    .yellow()
-                    .bold()
-            );
-            println!();
-            for entry in &misplaced {
-                let status = if entry.needs_quotes() {
-                    format!("{} + {}", "MISPLACED".yellow(), "UNQUOTED".red())
-                } else {
-                    "MISPLACED".yellow().to_string()
-                };
-                println!("  [{}] {}", status, entry.path);
-                if !entry.exists {
-                    println!("      └─ {} Path does not exist", "⚠".yellow());
-                }
-            }
-            println!();
-        }
-
-        // Find unquoted system paths
-        let unquoted_system: Vec<_> = self
-            .entries
-            .iter()
-            .filter(|e| {
-                matches!(e.location, PathLocation::System)
-                    && matches!(e.category, PathCategory::SystemProgram)
-                    && e.needs_quotes()
-            })
-            .collect();
-
-        if !unquoted_system.is_empty() {
-            println!("{}", "🔒 System Paths Needing Quotes:".red().bold());
-            println!();
-            for entry in &unquoted_system {
-                println!("  [{}] {}", "UNQUOTED".red(), entry.path);
-            }
-            println!();
-        }
-
-        // Find unquoted user paths
-        let unquoted_user: Vec<_> = self
-            .entries
-            .iter()
-            .filter(|e| matches!(e.location, PathLocation::User) && e.needs_quotes())
-            .collect();
-
-        if !unquoted_user.is_empty() {
-            println!("{}", "🔓 User Paths Needing Quotes:".yellow().bold());
-            println!();
-            for entry in &unquoted_user {
-                println!("  [{}] {}", "UNQUOTED".yellow(), entry.path);
-            }
-            println!();
-        }
-
-        // Find duplicates
-        let mut seen = std::collections::HashSet::new();
-        let mut duplicates = Vec::new();
-        for entry in &self.entries {
-            let normalized = entry.path.trim_matches('"').to_lowercase();
-            if !seen.insert(normalized.clone()) {
-                duplicates.push(entry);
-            }
-        }
-
-        if !duplicates.is_empty() {
-            println!("{}", "🔄 Duplicate Paths:".blue().bold());
-            println!();
-            for entry in &duplicates {
-                let loc = match entry.location {
-                    PathLocation::System => "SYSTEM",
-                    PathLocation::User => "USER",
-                };
-                println!("  [{}] {}", loc.blue(), entry.path);
-            }
-            println!();
-        }
-
-        // Summary
-        println!("{}", "=".repeat(70).cyan());
-        self.print_summary(&misplaced, &unquoted_system, &unquoted_user, &duplicates);
-    }
-
-    fn print_summary(
-        &self,
-        misplaced: &[&PathEntry],
-        unquoted_system: &[&PathEntry],
-        unquoted_user: &[&PathEntry],
-        duplicates: &[&PathEntry],
-    ) {
-        println!("{}", "Summary:".bold());
-        println!();
-
-        let system_count = self
-            .entries
-            .iter()
-            .filter(|e| matches!(e.location, PathLocation::System))
-            .count();
-        let user_count = self
-            .entries
-            .iter()
-            .filter(|e| matches!(e.location, PathLocation::User))
-            .count();
-
-        println!(
-            "  Total paths: {}",
-            (system_count + user_count).to_string().bold()
-        );
-        println!("    • SYSTEM PATH: {}", system_count);
-        println!("    • USER PATH: {}", user_count);
-        println!();
-
-        println!("{}", "Issues Found:".bold());
-        println!(
-            "  {} User paths in SYSTEM PATH (should be moved)",
-            misplaced.len().to_string().yellow().bold()
-        );
-        println!(
-            "  {} System paths needing quotes (requires admin)",
-            unquoted_system.len().to_string().red().bold()
-        );
-        println!(
-            "  {} User paths needing quotes",
-            unquoted_user.len().to_string().yellow().bold()
-        );
-        println!(
-            "  {} Duplicate paths",
-            duplicates.len().to_string().blue().bold()
-        );
-        println!();
-
-        if !misplaced.is_empty() || !unquoted_system.is_empty() {
-            println!("{}", "Recommendations:".bold().green());
-            if !misplaced.is_empty() {
-                println!("  • Run 'spath clean --dry-run' to see cleanup plan");
-            }
-            if !unquoted_system.is_empty() {
-                println!("  • System paths require administrator rights to fix");
-            }
-            if !unquoted_user.is_empty() {
-                println!("  • Run 'spath fix' to fix user paths");
-            }
-        } else {
-            println!("{}", "✓ No major issues found!".green().bold());
-        }
-    }
 }
