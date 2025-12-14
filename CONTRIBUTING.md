@@ -70,7 +70,8 @@ cargo test -- --nocapture
 spath/
 ├── src/
 │   ├── main.rs           # CLI entry point
-│   ├── registry.rs       # Windows Registry operations
+│   ├── registry.rs       # Windows Registry operations with file locking
+│   ├── formatter.rs      # Console output formatting
 │   ├── scanner/          # PATH scanning
 │   ├── analyzer/         # SYSTEM/USER PATH analysis
 │   ├── fixer/            # PATH fixing and backup
@@ -159,7 +160,9 @@ fn test_parse_path_string_with_empty_entries() {
 - `analyzer_tests.rs` - Path categorization
 - `fixer_tests.rs` - Backup and restore operations
 - `migrator_tests.rs` - Migration planning
+- `registry_tests.rs` - Registry operations and file locking
 - `integration_tests.rs` - End-to-end workflows
+- `utils_tests.rs` - Utility functions
 
 ## Adding New Features
 

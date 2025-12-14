@@ -63,13 +63,14 @@ spath is a security tool that:
 2. **Dry-Run Mode**: Preview changes with `--dry-run` before applying
 3. **Delicate Mode**: Confirmation prompts with `--delicate`
 4. **PATH Length Validation**: Prevents exceeding Windows 2047 character limit
-5. **No Network Access**: All operations are local
+5. **File Locking**: Prevents race conditions via `fs2` crate exclusive locks
+6. **Path Traversal Protection**: Backup restore validates file paths
+7. **No Network Access**: All operations are local
 
 ### Known Limitations
 
 1. **Backup files are not encrypted**: Stored as plain JSON in user's AppData
-2. **No file locking**: Concurrent modifications may cause issues
-3. **Registry permissions**: Relies on Windows ACLs for protection
+2. **Registry permissions**: Relies on Windows ACLs for protection
 
 ### Best Practices
 
