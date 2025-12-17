@@ -18,6 +18,14 @@ exclude = [
     "tests/",
 ]
 
+[lib]
+name = "spath_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "spath"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 chrono = "0.4"

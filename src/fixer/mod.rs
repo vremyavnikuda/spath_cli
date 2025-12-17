@@ -75,7 +75,7 @@ impl PathFixer {
 
             // Skip duplicates
             if seen.contains(trimmed) {
-                changes.push(format!("Removed duplicate: {}", trimmed.yellow()));
+                changes.push(format!("Removed duplicate: {}", trimmed));
                 continue;
             }
             seen.insert(trimmed.to_string());
@@ -83,7 +83,7 @@ impl PathFixer {
             // Fix unquoted paths with spaces
             if trimmed.contains(' ') && !trimmed.starts_with('"') {
                 let quoted = format!("\"{}\"", trimmed);
-                changes.push(format!("Fixed: {} → {}", trimmed.red(), quoted.green()));
+                changes.push(format!("{} -> {}", trimmed, quoted));
                 fixed_paths.push(quoted);
             } else {
                 fixed_paths.push(trimmed.to_string());
