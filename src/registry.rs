@@ -22,7 +22,7 @@ const USER_ENV_KEY: &str = "Environment";
 
 /// Maximum length for PATH environment variable in Windows.
 /// Windows has a limit of 2047 characters for environment variables set via registry.
-/// See: https://devblogs.microsoft.com/oldnewthing/20100203-00/?p=15083
+/// See: <https://devblogs.microsoft.com/oldnewthing/20100203-00/?p=15083>
 pub const MAX_PATH_LENGTH: usize = 2047;
 
 /// Lock file names for preventing race conditions
@@ -75,7 +75,7 @@ impl RegistryHelper {
             .context("Failed to read system PATH")
     }
 
-    /// Reads SYSTEM PATH as Vec<String> (parsed by semicolon).
+    /// Reads SYSTEM PATH as `Vec<String>` (parsed by semicolon).
     /// May fail without administrator rights.
     pub fn read_system_path() -> Result<Vec<String>> {
         let path = Self::read_system_path_raw()?;
@@ -94,7 +94,7 @@ impl RegistryHelper {
             .context("Failed to read user PATH")
     }
 
-    /// Reads USER PATH as Vec<String> (parsed by semicolon).
+    /// Reads USER PATH as `Vec<String>` (parsed by semicolon).
     pub fn read_user_path() -> Result<Vec<String>> {
         let path = Self::read_user_path_raw()?;
         Ok(Self::parse_path_string(&path))
@@ -158,7 +158,6 @@ impl RegistryHelper {
     /// - Registry key cannot be opened (requires admin)
     /// - Value cannot be written to registry
     pub fn write_system_path(path: &str) -> Result<()> {
-        // Acquire exclusive lock before modifying
         let _lock = PathLockGuard::acquire(SYSTEM_PATH_LOCK)
             .context("Failed to acquire lock for SYSTEM PATH modification")?;
 
@@ -172,10 +171,9 @@ impl RegistryHelper {
         env_key
             .set_value("Path", &path)
             .context("Failed to write system PATH to registry")
-        // Lock is automatically released when _lock goes out of scope
     }
 
-    /// Parses PATH string into Vec<String>, filtering empty entries.
+    /// Parses PATH string into `Vec<String>`, filtering empty entries.
     pub fn parse_path_string(path: &str) -> Vec<String> {
         path.split(';')
             .filter(|s| !s.is_empty())

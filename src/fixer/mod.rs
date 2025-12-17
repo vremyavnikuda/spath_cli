@@ -35,7 +35,7 @@ impl PathFixer {
         let user_path = RegistryHelper::read_user_path_raw()
             .context("Failed to read user PATH from registry")?;
 
-        // Try to read system PATH (may fail without admin rights)
+        // Try to read system PATH
         let system_path = RegistryHelper::read_system_path_raw().ok();
 
         let backup = PathBackup {

@@ -111,7 +111,6 @@ impl ConsoleFormatter {
         );
         println!();
 
-        // Calculate health score
         let health_score = if results.audit.total_paths > 0 {
             ((results.audit.valid_paths as f64 / results.audit.total_paths as f64) * 100.0) as u32
         } else {
@@ -142,7 +141,6 @@ impl ConsoleFormatter {
         println!("{}", "System PATH Analysis".bold().cyan());
         println!();
 
-        // Find misplaced paths
         let misplaced: Vec<_> = results
             .entries
             .iter()
@@ -171,7 +169,6 @@ impl ConsoleFormatter {
             println!();
         }
 
-        // Find unquoted system paths
         let unquoted_system: Vec<_> = results
             .entries
             .iter()
@@ -191,7 +188,6 @@ impl ConsoleFormatter {
             println!();
         }
 
-        // Find unquoted user paths
         let unquoted_user: Vec<_> = results
             .entries
             .iter()
