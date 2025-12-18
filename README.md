@@ -16,6 +16,22 @@ spath detects and fixes these vulnerabilities automatically.
 
 ## Installation
 
+### Download (easiest)
+
+Download from [GitHub Releases](https://github.com/vremyavnikuda/spath_cli/releases):
+
+- `spath-setup.exe` — Installer (adds to PATH automatically)
+- `spath.exe` — Standalone executable
+- `spath-windows-x64.zip` — Archive with docs
+
+### From crates.io
+
+```bash
+cargo install spath-cli
+```
+
+### From source
+
 ```bash
 cargo build --release
 ```

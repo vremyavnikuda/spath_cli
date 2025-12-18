@@ -106,31 +106,85 @@ jobs:
           copy docs\README.ja.md release\
           Compress-Archive -Path release\* -DestinationPath spath-windows-x64.zip
 
-      - name: Upload artifact
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
           name: spath-windows-x64
           path: spath-windows-x64.zip
 
+      - name: Upload standalone EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-exe
+          path: target/x86_64-pc-windows-msvc/release/spath.exe
+
+  build-installer:
+    name: Build NSIS Installer
+    runs-on: windows-latest
+    needs: [build-windows-target]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-exe
+          path: target/release
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Install EnVar plugin
+        run: |
+          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/7/7f/EnVar_plugin.zip" -OutFile "EnVar.zip"
+          Expand-Archive -Path "EnVar.zip" -DestinationPath "EnVar"
+          Copy-Item "EnVar\Plugins\x86-unicode\EnVar.dll" "C:\Program Files (x86)\NSIS\Plugins\x86-unicode\"
+          Copy-Item "EnVar\Plugins\x86-ansi\EnVar.dll" "C:\Program Files (x86)\NSIS\Plugins\x86-ansi\"
+
+      - name: Build installer
+        run: |
+          cd installer
+          makensis spath-installer.nsi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-installer
+          path: installer/spath-setup.exe
+
   create-release:
     name: Create GitHub Release
     runs-on: windows-latest
-    needs: [build-windows-target]
+    needs: [build-windows-target, build-installer]
     permissions:
       contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifact
+      - name: Download ZIP artifact
         uses: actions/download-artifact@v4
         with:
           name: spath-windows-x64
 
+      - name: Download EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-exe
+
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-installer
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: spath-windows-x64.zip
+          files: |
+            spath-windows-x64.zip
+            spath.exe
+            spath-setup.exe
           draft: false
           prerelease: false
           generate_release_notes: true

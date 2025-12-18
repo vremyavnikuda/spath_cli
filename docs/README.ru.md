@@ -14,6 +14,22 @@ spath обнаруживает и исправляет эти уязвимост
 
 ## Установка
 
+### Скачать (проще всего)
+
+Скачайте с [GitHub Releases](https://github.com/vremyavnikuda/spath_cli/releases):
+
+- `spath-setup.exe` — Установщик (автоматически добавляет в PATH)
+- `spath.exe` — Портативный исполняемый файл
+- `spath-windows-x64.zip` — Архив с документацией
+
+### Из crates.io
+
+```bash
+cargo install spath-cli
+```
+
+### Из исходников
+
 ```bash
 cargo build --release
 ```

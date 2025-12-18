@@ -14,6 +14,22 @@ spathはこれらの脆弱性を自動的に検出して修正します。
 
 ## インストール
 
+### ダウンロード（最も簡単）
+
+[GitHub Releases](https://github.com/vremyavnikuda/spath_cli/releases)からダウンロード:
+
+- `spath-setup.exe` — インストーラー（PATHに自動追加）
+- `spath.exe` — スタンドアロン実行ファイル
+- `spath-windows-x64.zip` — ドキュメント付きアーカイブ
+
+### crates.ioから
+
+```bash
+cargo install spath-cli
+```
+
+### ソースから
+
 ```bash
 cargo build --release
 ```
