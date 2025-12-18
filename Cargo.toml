@@ -5,9 +5,9 @@ edition = "2021"
 authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
 description = "A Windows PATH security scanner and fixer - detects and fixes unquoted paths with spaces"
 license = "MIT"
-repository = "https://github.com/vremyavnikuda/spath"
-homepage = "https://github.com/vremyavnikuda/spath"
-documentation = "https://github.com/vremyavnikuda/spath"
+repository = "https://github.com/vremyavnikuda/spath_cli"
+homepage = "https://github.com/vremyavnikuda/spath_cli"
+documentation = "https://github.com/vremyavnikuda/spath_cli"
 readme = "README.md"
 keywords = ["windows", "path", "security", "cli", "scanner"]
 categories = ["command-line-utilities", "development-tools"]
@@ -17,10 +17,6 @@ exclude = [
     ".github/",
     "tests/",
 ]
-
-[lib]
-name = "spath_lib"
-path = "src/lib.rs"
 
 [[bin]]
 name = "spath"
