@@ -1,6 +1,6 @@
 [package]
 name = "spath-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["vremyavnikuda <hopperplayer0@gmail.com>"]
 description = "A Windows PATH security scanner and fixer - detects and fixes unquoted paths with spaces"
