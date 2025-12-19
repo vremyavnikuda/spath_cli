@@ -76,7 +76,7 @@ impl RegistryHelper {
     }
 
     /// Reads SYSTEM PATH as `Vec<String>`.
-    /// 
+    ///
     /// May fail without administrator rights.
     pub fn read_system_path() -> Result<Vec<String>> {
         let path = Self::read_system_path_raw()?;

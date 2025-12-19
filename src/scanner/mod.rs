@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::registry::RegistryHelper;
 
 /// Expands environment variables in a path string.
-/// 
+///
 /// Supports Windows-style `%VAR%` syntax.
 fn expand_env_vars(path: &str) -> String {
     let mut result = path.to_string();

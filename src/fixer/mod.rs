@@ -106,9 +106,8 @@ impl PathFixer {
                     let expanded = expand_env_vars(trimmed);
                     let expanded_exists = Path::new(&expanded).exists();
                     !expanded_exists || expanded == trimmed
-                } else if trimmed.contains('$') {
-                    true
                 } else {
+                    // Non-existent path without variables - remove
                     true
                 }
             } else {
