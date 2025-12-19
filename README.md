@@ -45,19 +45,31 @@ Binary location: `target/release/spath.exe`
 Analyze PATH for security issues.
 
 ```bash
-spath scan
-spath scan --verbose
-spath scan --audit
+spath scan                    # Scan USER PATH only
+spath scan --verbose          # Show detailed information
+spath scan --audit            # Show audit statistics
+spath scan --system           # Scan SYSTEM PATH (requires admin to fix)
 ```
+
+### Verify
+
+Check if critical issues are actually exploitable by verifying the presence of malicious files.
+
+```bash
+spath verify                  # Verify USER PATH security
+spath verify --system         # Verify SYSTEM PATH security
+```
+
+This command checks if unquoted paths with spaces can actually be exploited by looking for malicious files like `C:\Program.exe` that could hijack legitimate programs.
 
 ### Fix
 
 Fix USER PATH issues (no admin required).
 
 ```bash
-spath fix --dry-run
-spath fix
-spath fix --delicate
+spath fix --dry-run           # Preview changes without applying
+spath fix                     # Apply fixes to USER PATH
+spath fix --delicate          # Ask for confirmation before changes
 ```
 
 ### Analyze
@@ -73,37 +85,55 @@ spath analyze
 Remove duplicate paths and optimize PATH.
 
 ```bash
-spath clean --dry-run
-spath clean
-spath clean --system
-spath clean --delicate
+spath clean --dry-run         # Preview cleanup
+spath clean                   # Clean USER PATH
+spath clean --system          # Clean SYSTEM PATH (requires admin)
+spath clean --delicate        # Ask for confirmation
 ```
 
 ### Backup Management
 
 ```bash
-spath backup
-spath list-backups
-spath restore <backup-file>
-spath restore <backup-file> --delicate
+spath backup                  # Create backup of current PATH
+spath list-backups            # List all available backups
+spath restore <backup-file>   # Restore from backup
+spath restore <backup-file> --delicate  # Restore with confirmation
 ```
 
 ## Issue Types
 
-**CRITICAL**: Unquoted paths with spaces - security vulnerability
+**CRITICAL**: Unquoted paths with spaces in system directories (e.g., `C:\Program Files`) - potential security vulnerability that could be exploited
 
-**WARNING**: Non-existent paths or relative paths
+**WARNING**: Non-existent paths, relative paths, or unquoted paths with spaces that don't exist
 
-**INFO**: Informational messages
+**INFO**: Informational messages about properly quoted paths or minor issues
+
+## Security Verification
+
+The `verify` command distinguishes between:
+- **Potential risks**: Vulnerable paths but no exploit files detected (safe for now)
+- **Real threats**: Malicious files found that could exploit the vulnerability (immediate action required)
+
+Example: If `C:\Program Files\App\bin` is in PATH without quotes, the tool checks for:
+- `C:\Program.exe`
+- `C:\Program.com`
+- `C:\Program.bat`
+- `C:\Program.cmd`
 
 ## Workflow
 
+### Basic Workflow
 1. Scan: `spath scan --audit`
-2. Analyze: `spath analyze`
+2. Verify: `spath verify` (check for real threats)
 3. Backup: `spath backup`
 4. Fix USER PATH: `spath fix`
 5. Remove duplicates: `spath clean`
 6. If needed, restore: `spath restore <backup-file>`
+
+### Advanced Workflow (with SYSTEM PATH)
+1. Scan SYSTEM: `spath scan --system`
+2. Verify SYSTEM: `spath verify --system` (check for exploits)
+3. If safe, consider fixing SYSTEM PATH (requires admin rights)
 
 ## Requirements
 
@@ -129,3 +159,7 @@ spath restore <backup-file> --delicate
 ## License
 
 MIT License - see the [LICENSE](LICENSE) file for details
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.

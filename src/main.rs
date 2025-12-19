@@ -48,6 +48,10 @@ enum Commands {
         /// Show detailed audit report
         #[arg(short, long)]
         audit: bool,
+
+        /// Include SYSTEM PATH in scan (requires admin to fix)
+        #[arg(short, long)]
+        system: bool,
     },
 
     /// Fix PATH security issues
@@ -94,17 +98,36 @@ enum Commands {
         #[arg(long)]
         delicate: bool,
     },
+
+    /// Verify if critical issues are actually exploitable
+    Verify {
+        /// Include SYSTEM PATH in verification
+        #[arg(short, long)]
+        system: bool,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Scan { verbose, audit } => {
+        Commands::Scan {
+            verbose,
+            audit,
+            system,
+        } => {
             println!("{}", "spath - Windows PATH Security Scanner".bold().cyan());
             println!();
 
-            let scanner = PathScanner::new()?;
+            if system {
+                println!(
+                    "{}",
+                    "Scanning SYSTEM PATH (requires admin rights to fix)".yellow()
+                );
+                println!();
+            }
+
+            let scanner = PathScanner::new(system)?;
             let results = scanner.scan()?;
 
             ConsoleFormatter::print_scan_results(&results, verbose);
@@ -256,7 +279,142 @@ fn main() -> Result<()> {
                 );
             }
         }
+
+        Commands::Verify { system } => {
+            println!("{}", "spath - Security Verification".bold().cyan());
+            println!();
+
+            if system {
+                println!("{}", "Verifying SYSTEM PATH security...".yellow());
+            } else {
+                println!("{}", "Verifying USER PATH security...".yellow());
+            }
+            println!();
+
+            let scanner = PathScanner::new(system)?;
+            let results = scanner.scan()?;
+
+            // Filter only critical issues
+            let critical_issues: Vec<_> = results
+                .issues
+                .iter()
+                .filter(|issue| matches!(issue.level, scanner::IssueLevel::Critical))
+                .collect();
+
+            if critical_issues.is_empty() {
+                println!("{}", "✓ No critical security issues found!".green().bold());
+                return Ok(());
+            }
+
+            println!(
+                "{}",
+                format!(
+                    "Found {} critical issue(s). Verifying exploitability...",
+                    critical_issues.len()
+                )
+                .yellow()
+            );
+            println!();
+
+            let mut real_threats = 0;
+            let mut false_positives = 0;
+
+            for issue in &critical_issues {
+                let path = &issue.path;
+                let exploit_paths = generate_exploit_paths(path);
+                let mut found_exploits = Vec::new();
+                for exploit_path in &exploit_paths {
+                    if std::path::Path::new(exploit_path).exists() {
+                        found_exploits.push(exploit_path.clone());
+                    }
+                }
+
+                if found_exploits.is_empty() {
+                    false_positives += 1;
+                    println!("{} {}", "✓".green(), path);
+                    println!("  No exploit files found - safe for now");
+                } else {
+                    real_threats += 1;
+                    println!("{} {}", "✗".red().bold(), path);
+                    println!(
+                        "  {} Potential exploit files found:",
+                        "DANGER:".red().bold()
+                    );
+                    for exploit in found_exploits {
+                        println!("    - {}", exploit.red());
+                    }
+                }
+                println!();
+            }
+
+            println!();
+            println!("{}", "Verification Summary:".bold());
+            println!("  Total critical issues: {}", critical_issues.len());
+            println!(
+                "  {} Real threats (exploit files exist): {}",
+                "✗".red(),
+                real_threats
+            );
+            println!(
+                "  {} Potential risks (no exploits yet): {}",
+                "✓".green(),
+                false_positives
+            );
+
+            if real_threats > 0 {
+                println!();
+                println!("{}", "⚠ IMMEDIATE ACTION REQUIRED!".red().bold());
+                println!("  Malicious files detected that could exploit your PATH.");
+                println!("  Remove these files or fix your PATH immediately.");
+            } else {
+                println!();
+                println!("{}", "Current Status: SAFE".green().bold());
+                println!("  No active exploits detected, but paths are vulnerable.");
+                println!("  Consider fixing these issues to prevent future attacks.");
+            }
+        }
     }
 
     Ok(())
+}
+
+/// Generates potential exploit file paths for an unquoted path with spaces.
+///
+/// For example, `"C:\Program Files\App\bin"` could be exploited by:
+/// - `C:\Program.exe`, `C:\Program.com`, `C:\Program.bat`, `C:\Program.cmd`
+/// - `C:\Program Files\App.exe`, etc.
+fn generate_exploit_paths(path: &str) -> Vec<String> {
+    let mut exploits = Vec::new();
+    let path_lower = path.to_lowercase();
+    let clean_path = path.trim_matches('"');
+    let parts: Vec<&str> = clean_path.split(' ').collect();
+    if parts.len() < 2 {
+        return exploits;
+    }
+    if path_lower.starts_with("c:\\program files") {
+        exploits.push("C:\\Program.exe".to_string());
+        exploits.push("C:\\Program.com".to_string());
+        exploits.push("C:\\Program.bat".to_string());
+        exploits.push("C:\\Program.cmd".to_string());
+    }
+    if path_lower.contains("\\common files") {
+        exploits.push("C:\\Program Files\\Common.exe".to_string());
+        exploits.push("C:\\Program Files\\Common.com".to_string());
+        exploits.push("C:\\Program Files (x86)\\Common.exe".to_string());
+        exploits.push("C:\\Program Files (x86)\\Common.com".to_string());
+    }
+    let mut accumulated = String::new();
+    for (i, part) in parts.iter().enumerate() {
+        if i > 0 {
+            accumulated.push(' ');
+        }
+        accumulated.push_str(part);
+
+        if i < parts.len() - 1 {
+            for ext in &[".exe", ".com", ".bat", ".cmd"] {
+                exploits.push(format!("{}{}", accumulated, ext));
+            }
+        }
+    }
+    exploits
 }

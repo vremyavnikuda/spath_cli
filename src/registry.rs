@@ -51,7 +51,7 @@ impl PathLockGuard {
     }
 }
 
-/// Returns the directory for lock files: %LOCALAPPDATA%\spath\locks\
+/// Returns the directory for lock files: `%LOCALAPPDATA%\spath\locks\`
 fn get_lock_dir() -> Result<PathBuf> {
     let local_app_data =
         std::env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not set")?;
@@ -75,7 +75,8 @@ impl RegistryHelper {
             .context("Failed to read system PATH")
     }
 
-    /// Reads SYSTEM PATH as `Vec<String>` (parsed by semicolon).
+    /// Reads SYSTEM PATH as `Vec<String>`.
+    /// 
     /// May fail without administrator rights.
     pub fn read_system_path() -> Result<Vec<String>> {
         let path = Self::read_system_path_raw()?;
@@ -94,7 +95,7 @@ impl RegistryHelper {
             .context("Failed to read user PATH")
     }
 
-    /// Reads USER PATH as `Vec<String>` (parsed by semicolon).
+    /// Reads USER PATH as `Vec<String>`.
     pub fn read_user_path() -> Result<Vec<String>> {
         let path = Self::read_user_path_raw()?;
         Ok(Self::parse_path_string(&path))
@@ -142,7 +143,6 @@ impl RegistryHelper {
         env_key
             .set_value("Path", &path)
             .context("Failed to write user PATH to registry")
-        // Lock is automatically released when _lock goes out of scope
     }
 
     /// Writes SYSTEM PATH to registry with exclusive locking.

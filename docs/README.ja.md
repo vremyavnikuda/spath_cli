@@ -43,19 +43,31 @@ cargo build --release
 PATHのセキュリティ問題を分析します。
 
 ```bash
-spath scan
-spath scan --verbose
-spath scan --audit
+spath scan                    # USER PATHのみをスキャン
+spath scan --verbose          # 詳細情報を表示
+spath scan --audit            # 監査統計を表示
+spath scan --system           # SYSTEM PATHをスキャン（修正には管理者権限が必要）
 ```
+
+### セキュリティ検証
+
+悪意のあるファイルの存在を確認することで、重大な問題が実際に悪用可能かどうかをチェックします。
+
+```bash
+spath verify                  # USER PATHのセキュリティを検証
+spath verify --system         # SYSTEM PATHのセキュリティを検証
+```
+
+このコマンドは、`C:\Program.exe`のような悪意のあるファイルを探すことで、クォートされていないスペース付きパスが実際に悪用される可能性があるかどうかをチェックします。
 
 ### 修正
 
 USER PATHの問題を修正します（管理者権限不要）。
 
 ```bash
-spath fix --dry-run
-spath fix
-spath fix --delicate
+spath fix --dry-run           # 変更を適用せずにプレビュー
+spath fix                     # USER PATHに修正を適用
+spath fix --delicate          # 変更前に確認を求める
 ```
 
 ### 分析
@@ -71,37 +83,55 @@ spath analyze
 重複パスを削除してPATHを最適化します。
 
 ```bash
-spath clean --dry-run
-spath clean
-spath clean --system
-spath clean --delicate
+spath clean --dry-run         # クリーンアップをプレビュー
+spath clean                   # USER PATHをクリーンアップ
+spath clean --system          # SYSTEM PATHをクリーンアップ（管理者権限必要）
+spath clean --delicate        # 確認を求める
 ```
 
 ### バックアップ管理
 
 ```bash
-spath backup
-spath list-backups
-spath restore <バックアップファイル>
-spath restore <バックアップファイル> --delicate
+spath backup                  # 現在のPATHのバックアップを作成
+spath list-backups            # 利用可能なすべてのバックアップを一覧表示
+spath restore <ファイル>      # バックアップから復元
+spath restore <ファイル> --delicate  # 確認付きで復元
 ```
 
 ## 問題の種類
 
-**CRITICAL**: クォートされていないスペース付きパス - セキュリティ脆弱性
+**CRITICAL**: システムディレクトリ（例：`C:\Program Files`）内のクォートされていないスペース付きパス - 悪用される可能性のある潜在的なセキュリティ脆弱性
 
-**WARNING**: 存在しないパスまたは相対パス
+**WARNING**: 存在しないパス、相対パス、または存在しないクォートされていないスペース付きパス
 
-**INFO**: 情報メッセージ
+**INFO**: 適切にクォートされたパスまたは軽微な問題に関する情報メッセージ
+
+## セキュリティ検証
+
+`verify`コマンドは以下を区別します：
+- **潜在的リスク**: 脆弱なパスだが悪用ファイルは検出されていない（現時点では安全）
+- **実際の脅威**: 脆弱性を悪用する可能性のある悪意のあるファイルが見つかった（即座の対応が必要）
+
+例：`C:\Program Files\App\bin`がクォートなしでPATHにある場合、ツールは以下をチェックします：
+- `C:\Program.exe`
+- `C:\Program.com`
+- `C:\Program.bat`
+- `C:\Program.cmd`
 
 ## ワークフロー
 
+### 基本ワークフロー
 1. スキャン: `spath scan --audit`
-2. 分析: `spath analyze`
+2. 検証: `spath verify`（実際の脅威をチェック）
 3. バックアップ: `spath backup`
 4. USER PATH修正: `spath fix`
 5. 重複削除: `spath clean`
 6. 必要に応じて復元: `spath restore <ファイル>`
+
+### 高度なワークフロー（SYSTEM PATHを含む）
+1. SYSTEMスキャン: `spath scan --system`
+2. SYSTEM検証: `spath verify --system`（エクスプロイトをチェック）
+3. 安全であれば、SYSTEM PATHの修正を検討（管理者権限が必要）
 
 ## 要件
 
@@ -127,3 +157,7 @@ spath restore <バックアップファイル> --delicate
 ## ライセンス
 
 MIT License - [LICENSE](../LICENSE)ファイルを参照
+
+## 変更履歴
+
+バージョン履歴とリリースノートについては、[CHANGELOG.md](../CHANGELOG.md)を参照してください。

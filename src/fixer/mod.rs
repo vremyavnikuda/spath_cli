@@ -8,6 +8,28 @@ use std::path::{Path, PathBuf};
 
 use crate::registry::RegistryHelper;
 
+/// Expands environment variables in a path string.
+///
+/// Supports Windows-style `%VAR%` syntax.
+fn expand_env_vars(path: &str) -> String {
+    let mut result = path.to_string();
+    while let Some(start) = result.find('%') {
+        if let Some(end) = result[start + 1..].find('%') {
+            let var_name = &result[start + 1..start + 1 + end];
+            if let Ok(value) = env::var(var_name) {
+                let pattern = format!("%{}%", var_name);
+                result = result.replace(&pattern, &value);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    result
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PathBackup {
     pub timestamp: String,
@@ -72,18 +94,35 @@ impl PathFixer {
 
         for path in paths {
             let trimmed = path.trim();
-
-            // Skip duplicates
             if seen.contains(trimmed) {
                 changes.push(format!("Removed duplicate: {}", trimmed));
                 continue;
             }
             seen.insert(trimmed.to_string());
+            let path_to_check = trimmed.trim_matches('"');
+            let exists = Path::new(path_to_check).exists();
+            let should_remove = if !exists {
+                if trimmed.contains('%') {
+                    let expanded = expand_env_vars(trimmed);
+                    let expanded_exists = Path::new(&expanded).exists();
+                    !expanded_exists || expanded == trimmed
+                } else if trimmed.contains('$') {
+                    true
+                } else {
+                    true
+                }
+            } else {
+                false
+            };
 
-            // Fix unquoted paths with spaces
+            if should_remove {
+                changes.push(format!("Removed non-existent: {}", trimmed));
+                continue;
+            }
+
             if trimmed.contains(' ') && !trimmed.starts_with('"') {
                 let quoted = format!("\"{}\"", trimmed);
-                changes.push(format!("{} -> {}", trimmed, quoted));
+                changes.push(format!("Added quotes: {} -> {}", trimmed, quoted));
                 fixed_paths.push(quoted);
             } else {
                 fixed_paths.push(trimmed.to_string());

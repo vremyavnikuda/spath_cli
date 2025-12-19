@@ -1,6 +1,55 @@
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::env;
 use std::path::Path;
+
+use crate::registry::RegistryHelper;
+
+/// Expands environment variables in a path string.
+/// 
+/// Supports Windows-style `%VAR%` syntax.
+fn expand_env_vars(path: &str) -> String {
+    let mut result = path.to_string();
+    while let Some(start) = result.find('%') {
+        if let Some(end) = result[start + 1..].find('%') {
+            let var_name = &result[start + 1..start + 1 + end];
+            if let Ok(value) = env::var(var_name) {
+                let pattern = format!("%{}%", var_name);
+                result = result.replace(&pattern, &value);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    result
+}
+
+/// Checks if an unquoted path with spaces could be exploited.
+///
+/// Returns true if the path could be vulnerable to DLL hijacking or similar attacks.
+///
+/// For example, `"C:\Program Files\App\bin"` could be exploited by creating:
+/// - `C:\Program.exe` (would be executed instead of `C:\Program Files\...`)
+/// - `C:\Program Files\App.exe` (would be executed instead of `C:\Program Files\App\...`)
+fn check_path_exploitable(path: &str) -> bool {
+    let path_lower = path.to_lowercase();
+    let exploitable_patterns = [
+        "c:\\program files",
+        "c:\\program files (x86)",
+        "c:\\windows ",
+    ];
+
+    for pattern in &exploitable_patterns {
+        if path_lower.starts_with(pattern) {
+            return true;
+        }
+    }
+
+    false
+}
 
 #[derive(Debug, Clone)]
 pub enum IssueLevel {
@@ -37,33 +86,42 @@ pub struct PathScanner {
 }
 
 impl PathScanner {
-    pub fn new() -> Result<Self> {
-        let path_var = env::var("PATH").context("Failed to read PATH environment variable")?;
+    pub fn new(scan_system: bool) -> Result<Self> {
+        let path_var = if scan_system {
+            RegistryHelper::read_system_path_raw()
+                .context("Failed to read SYSTEM PATH from registry")?
+        } else {
+            RegistryHelper::read_user_path_raw()
+                .context("Failed to read USER PATH from registry")?
+        };
 
         Ok(Self { path_var })
     }
 
     pub fn scan(&self) -> Result<ScanResults> {
-        let paths: Vec<String> = self
-            .path_var
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect();
+        let paths = RegistryHelper::parse_path_string(&self.path_var);
 
         let mut issues = Vec::new();
         let mut audit = AuditStats {
             total_paths: paths.len(),
             ..Default::default()
         };
+        let mut seen = HashSet::new();
 
         for path in &paths {
-            let has_spaces = path.contains(' ');
-            let is_quoted = path.starts_with('"');
-            let exists = Path::new(path.trim_matches('"')).exists();
-            let is_absolute = path.contains(':') || path.starts_with('"');
+            let trimmed = path.trim();
 
-            // Track statistics
+            let has_spaces = trimmed.contains(' ');
+            let is_quoted = trimmed.starts_with('"');
+            let path_to_check = if trimmed.contains('%') {
+                expand_env_vars(trimmed)
+            } else {
+                trimmed.trim_matches('"').to_string()
+            };
+
+            let exists = Path::new(&path_to_check).exists();
+            let is_absolute =
+                trimmed.contains(':') || trimmed.starts_with('"') || trimmed.contains('%');
             if has_spaces && !is_quoted {
                 audit.unquoted_with_spaces += 1;
             }
@@ -72,7 +130,7 @@ impl PathScanner {
                 audit.non_existent += 1;
             }
 
-            if !is_absolute && !path.is_empty() {
+            if !is_absolute && !trimmed.is_empty() {
                 audit.relative_paths += 1;
             }
 
@@ -80,29 +138,53 @@ impl PathScanner {
                 audit.properly_quoted += 1;
             }
 
-            // Valid path: exists, absolute, and if has spaces then quoted
             if exists && is_absolute && (!has_spaces || is_quoted) {
                 audit.valid_paths += 1;
             }
 
-            // Check for spaces without quotes
-            if has_spaces && !is_quoted {
+            if seen.contains(trimmed) {
                 issues.push(PathIssue {
                     path: path.clone(),
-                    level: IssueLevel::Critical,
-                    message: "Path contains spaces but is not quoted. This can be exploited!"
-                        .to_string(),
+                    level: IssueLevel::Warning,
+                    message: "Duplicate path entry".to_string(),
                 });
+            }
+            seen.insert(trimmed.to_string());
+
+            // Check for spaces without quotes
+            // Unquoted paths with spaces can be a security risk if they can be exploited
+            // by creating malicious directories (e.g., "C:\Program.exe" for "C:\Program Files")
+            if has_spaces && !is_quoted {
+                if exists {
+                    let is_exploitable = check_path_exploitable(trimmed);
+                    if is_exploitable {
+                        issues.push(PathIssue {
+                            path: path.clone(),
+                            level: IssueLevel::Critical,
+                            message: "Path contains spaces without quotes and could be exploited by creating malicious files/directories".to_string(),
+                        });
+                    } else {
+                        issues.push(PathIssue {
+                            path: path.clone(),
+                            level: IssueLevel::Info,
+                            message: "Path contains spaces but is not quoted. Consider adding quotes for better compatibility.".to_string(),
+                        });
+                    }
+                } else {
+                    issues.push(PathIssue {
+                        path: path.clone(),
+                        level: IssueLevel::Warning,
+                        message: "Path contains spaces, is not quoted, and does not exist"
+                            .to_string(),
+                    });
+                }
             } else if has_spaces && is_quoted && exists {
-                // Properly quoted path with spaces - good!
                 issues.push(PathIssue {
                     path: path.clone(),
                     level: IssueLevel::Info,
                     message: "Path is properly quoted".to_string(),
                 });
             }
-
-            // Check if path exists
             if !exists {
                 issues.push(PathIssue {
                     path: path.clone(),
@@ -110,9 +192,7 @@ impl PathScanner {
                     message: "Path does not exist".to_string(),
                 });
             }
-
-            // Check for relative paths
-            if !is_absolute && !path.is_empty() {
+            if !is_absolute && !trimmed.is_empty() {
                 issues.push(PathIssue {
                     path: path.clone(),
                     level: IssueLevel::Warning,

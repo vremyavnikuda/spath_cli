@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-12-20
+
+### Added
+- New `verify` command to check if critical issues are actually exploitable
+- `--system` flag for `scan` command to scan SYSTEM PATH separately
+- Function `check_path_exploitable()` to identify truly dangerous unquoted paths
+- Function `expand_env_vars()` for proper Windows environment variable expansion
+- Detailed exploit file detection (checks for `.exe`, `.com`, `.bat`, `.cmd` files)
+
+### Changed
+- Scanner now reads USER PATH from registry by default (not combined SYSTEM+USER)
+- Critical issues are now only reported for exploitable paths in system directories (`C:\Program Files`)
+- Unquoted paths with spaces in non-system directories are reported as INFO
+- Improved security classification: distinguishes between potential risks and real threats
+- Updated all documentation (English, Russian, Japanese) with new commands and workflows
+
+### Fixed
+- **[#1](https://github.com/vremyavnikuda/spath_cli/issues/1)** Environment variable expansion bug in scanner and fixer
+  - **Problem**: Paths like `%SystemRoot%\system32` were incorrectly reported as "Path does not exist"
+  - **Root cause**: `trim_matches('%')` removed all `%` characters, causing lookup of wrong variable names (e.g., `SystemRoot%\system32` instead of `SystemRoot`)
+  - **Solution**: Implemented proper `expand_env_vars()` function that correctly parses `%VAR%` patterns and expands them recursively
+  - **Impact**: Eliminated false positives for all Windows system paths using environment variables
+  - **Files affected**: `src/scanner/mod.rs`, `src/fixer/mod.rs`
+
+
 ## [0.1.0] - 2025-12-13
 
 ### Added
