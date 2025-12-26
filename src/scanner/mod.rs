@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 
+use crate::constants::{PROGRAM_FILES, PROGRAM_FILES_X86, WINDOWS_PATH};
 use crate::registry::RegistryHelper;
 
 /// Expands environment variables in a path string.
@@ -23,7 +24,6 @@ fn expand_env_vars(path: &str) -> String {
             break;
         }
     }
-
     result
 }
 
@@ -36,19 +36,9 @@ fn expand_env_vars(path: &str) -> String {
 /// - `C:\Program Files\App.exe` (would be executed instead of `C:\Program Files\App\...`)
 fn check_path_exploitable(path: &str) -> bool {
     let path_lower = path.to_lowercase();
-    let exploitable_patterns = [
-        "c:\\program files",
-        "c:\\program files (x86)",
-        "c:\\windows ",
-    ];
-
-    for pattern in &exploitable_patterns {
-        if path_lower.starts_with(pattern) {
-            return true;
-        }
-    }
-
-    false
+    path_lower.starts_with(PROGRAM_FILES)
+        || path_lower.starts_with(PROGRAM_FILES_X86)
+        || path_lower.starts_with(WINDOWS_PATH)
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +47,6 @@ pub enum IssueLevel {
     Warning,
     Info,
 }
-
 #[derive(Debug, Clone)]
 pub struct PathIssue {
     pub path: String,
@@ -94,23 +83,19 @@ impl PathScanner {
             RegistryHelper::read_user_path_raw()
                 .context("Failed to read USER PATH from registry")?
         };
-
         Ok(Self { path_var })
     }
 
     pub fn scan(&self) -> Result<ScanResults> {
         let paths = RegistryHelper::parse_path_string(&self.path_var);
-
         let mut issues = Vec::new();
         let mut audit = AuditStats {
             total_paths: paths.len(),
             ..Default::default()
         };
         let mut seen = HashSet::new();
-
         for path in &paths {
             let trimmed = path.trim();
-
             let has_spaces = trimmed.contains(' ');
             let is_quoted = trimmed.starts_with('"');
             let path_to_check = if trimmed.contains('%') {
@@ -118,30 +103,24 @@ impl PathScanner {
             } else {
                 trimmed.trim_matches('"').to_string()
             };
-
             let exists = Path::new(&path_to_check).exists();
             let is_absolute =
                 trimmed.contains(':') || trimmed.starts_with('"') || trimmed.contains('%');
             if has_spaces && !is_quoted {
                 audit.unquoted_with_spaces += 1;
             }
-
             if !exists {
                 audit.non_existent += 1;
             }
-
             if !is_absolute && !trimmed.is_empty() {
                 audit.relative_paths += 1;
             }
-
             if has_spaces && is_quoted {
                 audit.properly_quoted += 1;
             }
-
             if exists && is_absolute && (!has_spaces || is_quoted) {
                 audit.valid_paths += 1;
             }
-
             if seen.contains(trimmed) {
                 issues.push(PathIssue {
                     path: path.clone(),
@@ -150,10 +129,6 @@ impl PathScanner {
                 });
             }
             seen.insert(trimmed.to_string());
-
-            // Check for spaces without quotes
-            // Unquoted paths with spaces can be a security risk if they can be exploited
-            // by creating malicious directories (e.g., "C:\Program.exe" for "C:\Program Files")
             if has_spaces && !is_quoted {
                 if exists {
                     let is_exploitable = check_path_exploitable(trimmed);
@@ -200,7 +175,6 @@ impl PathScanner {
                 });
             }
         }
-
         Ok(ScanResults {
             paths,
             issues,

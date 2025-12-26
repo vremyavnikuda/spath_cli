@@ -16,18 +16,9 @@ use std::path::PathBuf;
 use winreg::enums::*;
 use winreg::RegKey;
 
-/// Registry key paths
-const SYSTEM_ENV_KEY: &str = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
-const USER_ENV_KEY: &str = "Environment";
-
-/// Maximum length for PATH environment variable in Windows.
-/// Windows has a limit of 2047 characters for environment variables set via registry.
-/// See: <https://devblogs.microsoft.com/oldnewthing/20100203-00/?p=15083>
-pub const MAX_PATH_LENGTH: usize = 2047;
-
-/// Lock file names for preventing race conditions
-const USER_PATH_LOCK: &str = "user_path.lock";
-const SYSTEM_PATH_LOCK: &str = "system_path.lock";
+use crate::constants::{
+    MAX_PATH_LENGTH, SYSTEM_ENV_KEY, SYSTEM_PATH_LOCK, USER_ENV_KEY, USER_PATH_LOCK,
+};
 
 /// RAII guard for file lock. Automatically releases lock when dropped.
 pub struct PathLockGuard {
@@ -40,13 +31,10 @@ impl PathLockGuard {
     fn acquire(lock_name: &str) -> Result<Self> {
         let lock_dir = get_lock_dir()?;
         fs::create_dir_all(&lock_dir).context("Failed to create lock directory")?;
-
         let lock_path = lock_dir.join(lock_name);
         let file = File::create(&lock_path).context("Failed to create lock file")?;
-
         file.lock_exclusive()
             .context("Failed to acquire exclusive lock. Another spath process may be running.")?;
-
         Ok(Self { _file: file })
     }
 }
@@ -69,7 +57,6 @@ impl RegistryHelper {
         let env_key = hklm
             .open_subkey(SYSTEM_ENV_KEY)
             .context("Failed to open system environment key. Try running as administrator.")?;
-
         env_key
             .get_value("Path")
             .context("Failed to read system PATH")
@@ -89,7 +76,6 @@ impl RegistryHelper {
         let env_key = hkcu
             .open_subkey(USER_ENV_KEY)
             .context("Failed to open user environment key")?;
-
         env_key
             .get_value("Path")
             .context("Failed to read user PATH")
@@ -129,17 +115,13 @@ impl RegistryHelper {
     /// - Registry key cannot be opened for writing
     /// - Value cannot be written to registry
     pub fn write_user_path(path: &str) -> Result<()> {
-        // Acquire exclusive lock before modifying
         let _lock = PathLockGuard::acquire(USER_PATH_LOCK)
             .context("Failed to acquire lock for USER PATH modification")?;
-
         Self::validate_path_length(path)?;
-
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let env_key = hkcu
             .open_subkey_with_flags(USER_ENV_KEY, KEY_WRITE)
             .context("Failed to open user environment key for writing")?;
-
         env_key
             .set_value("Path", &path)
             .context("Failed to write user PATH to registry")
@@ -160,14 +142,11 @@ impl RegistryHelper {
     pub fn write_system_path(path: &str) -> Result<()> {
         let _lock = PathLockGuard::acquire(SYSTEM_PATH_LOCK)
             .context("Failed to acquire lock for SYSTEM PATH modification")?;
-
         Self::validate_path_length(path)?;
-
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let env_key = hklm
             .open_subkey_with_flags(SYSTEM_ENV_KEY, KEY_READ | KEY_WRITE)
             .context("Failed to open system environment key for writing (requires admin)")?;
-
         env_key
             .set_value("Path", &path)
             .context("Failed to write system PATH to registry")

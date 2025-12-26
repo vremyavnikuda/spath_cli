@@ -35,7 +35,6 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
         if results.issues.is_empty() {
             println!("{}", "No security issues found.".green().bold());
         }
@@ -58,7 +57,6 @@ impl ConsoleFormatter {
             .iter()
             .filter(|i| matches!(i.level, IssueLevel::Info))
             .count();
-
         println!("{}", "Summary:".bold());
         println!("  Total paths: {}", results.paths.len());
         println!("  {} Critical issues", critical.to_string().red().bold());
@@ -71,7 +69,6 @@ impl ConsoleFormatter {
         println!();
         println!("{}", "Detailed Audit Report".bold().cyan());
         println!();
-
         println!("{}", "Path Statistics:".bold());
         println!(
             "  Total paths in PATH: {}",
@@ -82,7 +79,6 @@ impl ConsoleFormatter {
             results.audit.valid_paths.to_string().green()
         );
         println!();
-
         println!("{}", "Security Issues:".bold());
         println!(
             "  {} Unquoted paths with spaces (CRITICAL)",
@@ -90,7 +86,6 @@ impl ConsoleFormatter {
         );
         println!("    These paths are vulnerable to DLL hijacking and privilege escalation");
         println!();
-
         println!("{}", "Path Quality Issues:".bold());
         println!(
             "  {} Non-existent paths",
@@ -103,26 +98,22 @@ impl ConsoleFormatter {
         );
         println!("    Should use absolute paths for consistency");
         println!();
-
         println!("{}", "Good Practices:".bold());
         println!(
             "  {} Properly quoted paths with spaces",
             results.audit.properly_quoted.to_string().green()
         );
         println!();
-
         let health_score = if results.audit.total_paths > 0 {
             ((results.audit.valid_paths as f64 / results.audit.total_paths as f64) * 100.0) as u32
         } else {
             0
         };
-
         let health_color = match health_score {
             90..=100 => "green",
             70..=89 => "yellow",
             _ => "red",
         };
-
         println!("{}", "PATH Health Score:".bold());
         println!(
             "  {}% {}",
@@ -140,13 +131,11 @@ impl ConsoleFormatter {
     pub fn print_analysis_results(results: &AnalysisResults) {
         println!("{}", "System PATH Analysis".bold().cyan());
         println!();
-
         let misplaced: Vec<_> = results
             .entries
             .iter()
             .filter(|e| e.should_be_in_user_path())
             .collect();
-
         if !misplaced.is_empty() {
             println!(
                 "{}",
@@ -168,7 +157,6 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
         let unquoted_system: Vec<_> = results
             .entries
             .iter()
@@ -178,7 +166,6 @@ impl ConsoleFormatter {
                     && e.needs_quotes()
             })
             .collect();
-
         if !unquoted_system.is_empty() {
             println!("{}", "System Paths Needing Quotes:".red().bold());
             println!();
@@ -187,13 +174,11 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
         let unquoted_user: Vec<_> = results
             .entries
             .iter()
             .filter(|e| matches!(e.location, PathLocation::User) && e.needs_quotes())
             .collect();
-
         if !unquoted_user.is_empty() {
             println!("{}", "User Paths Needing Quotes:".yellow().bold());
             println!();
@@ -202,8 +187,6 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
-        // Find duplicates
         let mut seen = std::collections::HashSet::new();
         let mut duplicates = Vec::new();
         for entry in &results.entries {
@@ -212,7 +195,6 @@ impl ConsoleFormatter {
                 duplicates.push(entry);
             }
         }
-
         if !duplicates.is_empty() {
             println!("{}", "Duplicate Paths:".blue().bold());
             println!();
@@ -225,8 +207,6 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
-        // Summary
         Self::print_analysis_summary(
             results,
             &misplaced,
@@ -245,7 +225,6 @@ impl ConsoleFormatter {
     ) {
         println!("{}", "Summary:".bold());
         println!();
-
         let system_count = results
             .entries
             .iter()
@@ -256,7 +235,6 @@ impl ConsoleFormatter {
             .iter()
             .filter(|e| matches!(e.location, PathLocation::User))
             .count();
-
         println!(
             "  Total paths: {}",
             (system_count + user_count).to_string().bold()
@@ -264,7 +242,6 @@ impl ConsoleFormatter {
         println!("    SYSTEM PATH: {}", system_count);
         println!("    USER PATH: {}", user_count);
         println!();
-
         println!("{}", "Issues Found:".bold());
         println!(
             "  {} User paths in SYSTEM PATH (should be moved)",
@@ -283,7 +260,6 @@ impl ConsoleFormatter {
             duplicates.len().to_string().blue().bold()
         );
         println!();
-
         if !misplaced.is_empty() || !unquoted_system.is_empty() {
             println!("{}", "Recommendations:".bold().green());
             if !misplaced.is_empty() {
@@ -309,16 +285,12 @@ impl ConsoleFormatter {
             );
             return;
         }
-
         println!("{}", "Changes to be applied:".bold());
         println!();
-
         for change in &results.changes {
             println!("  {}", change);
         }
-
         println!();
-
         if results.dry_run {
             println!(
                 "{}",
@@ -341,36 +313,28 @@ impl ConsoleFormatter {
             );
             return;
         }
-
         println!("{}", "Migration Plan:".bold().cyan());
         println!();
-
-        // Count by action type
         let duplicates_count = plan
             .actions
             .iter()
             .filter(|a| matches!(a.action_type, ActionType::RemoveDuplicate))
             .count();
-
         let moves_count = plan
             .actions
             .iter()
             .filter(|a| matches!(a.action_type, ActionType::MoveToUser))
             .count();
-
-        // Group by action type for display
         let duplicates: Vec<_> = plan
             .actions
             .iter()
             .filter(|a| matches!(a.action_type, ActionType::RemoveDuplicate))
             .collect();
-
         let moves: Vec<_> = plan
             .actions
             .iter()
             .filter(|a| matches!(a.action_type, ActionType::MoveToUser))
             .collect();
-
         if !duplicates.is_empty() {
             println!("{}", "Remove Duplicates:".blue().bold());
             println!();
@@ -384,7 +348,6 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
         if !moves.is_empty() {
             println!("{}", "Move to USER PATH:".yellow().bold());
             println!();
@@ -394,13 +357,11 @@ impl ConsoleFormatter {
             }
             println!();
         }
-
         println!("{}", "Summary:".bold());
         println!("  Total actions: {}", plan.actions.len().to_string().bold());
         println!("  Duplicates to remove: {}", duplicates_count);
         println!("  Paths to move: {}", moves_count);
         println!();
-
         if plan.requires_admin {
             println!(
                 "{}",
@@ -410,7 +371,6 @@ impl ConsoleFormatter {
             );
             println!();
         }
-
         if dry_run {
             println!(
                 "{}",
