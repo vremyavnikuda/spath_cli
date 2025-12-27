@@ -1,19 +1,19 @@
-//! Tests for registry module - PATH reading, writing, and locking operations.
-
+﻿use spath_cli::constants::WINDOWS_PATH;
 use std::path::PathBuf;
 
-/// Tests for RegistryHelper::parse_path_string
 mod parse_tests {
+    use super::*;
+
     #[test]
     fn test_parse_path_string() {
-        let path = "C:\\Windows;C:\\System32;;C:\\Tools";
+        let path = format!("{};C:\\System32;;C:\\Tools", WINDOWS_PATH);
         let parsed: Vec<String> = path
             .split(';')
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect();
         assert_eq!(parsed.len(), 3);
-        assert_eq!(parsed[0], "C:\\Windows");
+        assert_eq!(parsed[0], WINDOWS_PATH);
         assert_eq!(parsed[1], "C:\\System32");
         assert_eq!(parsed[2], "C:\\Tools");
     }
@@ -31,19 +31,18 @@ mod parse_tests {
 
     #[test]
     fn test_parse_single_path() {
-        let path = "C:\\Windows";
-        let parsed: Vec<String> = path
+        let parsed: Vec<String> = WINDOWS_PATH
             .split(';')
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0], "C:\\Windows");
+        assert_eq!(parsed[0], WINDOWS_PATH);
     }
 
     #[test]
     fn test_parse_path_with_trailing_semicolon() {
-        let path = "C:\\Windows;C:\\System32;";
+        let path = format!("{};C:\\System32;", WINDOWS_PATH);
         let parsed: Vec<String> = path
             .split(';')
             .filter(|s| !s.is_empty())
@@ -54,7 +53,7 @@ mod parse_tests {
 
     #[test]
     fn test_parse_path_with_leading_semicolon() {
-        let path = ";C:\\Windows;C:\\System32";
+        let path = format!(";{};C:\\System32", WINDOWS_PATH);
         let parsed: Vec<String> = path
             .split(';')
             .filter(|s| !s.is_empty())
@@ -63,14 +62,14 @@ mod parse_tests {
         assert_eq!(parsed.len(), 2);
     }
 }
-
-/// Tests for RegistryHelper::join_paths
 mod join_tests {
+    use super::*;
+
     #[test]
     fn test_join_paths() {
-        let paths = ["C:\\Windows".to_string(), "C:\\System32".to_string()];
+        let paths = [WINDOWS_PATH.to_string(), "C:\\System32".to_string()];
         let joined = paths.join(";");
-        assert_eq!(joined, "C:\\Windows;C:\\System32");
+        assert_eq!(joined, format!("{};C:\\System32", WINDOWS_PATH));
     }
 
     #[test]
@@ -82,27 +81,29 @@ mod join_tests {
 
     #[test]
     fn test_join_single_path() {
-        let paths = ["C:\\Windows".to_string()];
+        let paths = [WINDOWS_PATH.to_string()];
         let joined = paths.join(";");
-        assert_eq!(joined, "C:\\Windows");
+        assert_eq!(joined, WINDOWS_PATH);
     }
 
     #[test]
     fn test_join_many_paths() {
         let paths = [
-            "C:\\Windows".to_string(),
+            WINDOWS_PATH.to_string(),
             "C:\\System32".to_string(),
             "C:\\Tools".to_string(),
             "C:\\Bin".to_string(),
         ];
         let joined = paths.join(";");
-        assert_eq!(joined, "C:\\Windows;C:\\System32;C:\\Tools;C:\\Bin");
+        assert_eq!(
+            joined,
+            format!("{};C:\\System32;C:\\Tools;C:\\Bin", WINDOWS_PATH)
+        );
     }
 }
-
-/// Tests for PATH length validation
 mod validation_tests {
-    const MAX_PATH_LENGTH: usize = 2047;
+    use super::*;
+    use spath_cli::constants::MAX_PATH_LENGTH;
 
     fn validate_path_length(path: &str) -> Result<(), String> {
         if path.len() > MAX_PATH_LENGTH {
@@ -118,8 +119,8 @@ mod validation_tests {
 
     #[test]
     fn test_validate_path_length_ok() {
-        let path = "C:\\Windows;C:\\System32";
-        assert!(validate_path_length(path).is_ok());
+        let path = format!("{};C:\\System32", WINDOWS_PATH);
+        assert!(validate_path_length(&path).is_ok());
     }
 
     #[test]
@@ -154,8 +155,6 @@ mod validation_tests {
         assert!(validate_path_length(&path).is_err());
     }
 }
-
-/// Tests for lock directory operations
 mod lock_tests {
     use super::*;
     use std::env;
@@ -192,8 +191,6 @@ mod lock_tests {
         fs::write(&lock_file, "test").unwrap();
 
         assert!(lock_file.exists());
-
-        // Cleanup
         let _ = fs::remove_file(&lock_file);
     }
 
@@ -204,8 +201,6 @@ mod lock_tests {
         assert!(lock_dir.exists());
     }
 }
-
-/// Tests for file locking mechanism
 mod file_lock_tests {
     use fs2::FileExt;
     use std::fs::{self, File};
@@ -226,14 +221,8 @@ mod file_lock_tests {
 
         let lock_path = lock_dir.join("exclusive_test.lock");
         let file = File::create(&lock_path).unwrap();
-
-        // Acquire lock
         assert!(file.lock_exclusive().is_ok());
-
-        // Release lock
         assert!(file.unlock().is_ok());
-
-        // Cleanup
         let _ = fs::remove_file(&lock_path);
     }
 
@@ -243,21 +232,14 @@ mod file_lock_tests {
         fs::create_dir_all(&lock_dir).unwrap();
 
         let lock_path = lock_dir.join("reacquire_test.lock");
-
-        // First acquisition
         {
             let file = File::create(&lock_path).unwrap();
             file.lock_exclusive().unwrap();
-            // Lock released when file goes out of scope
         }
-
-        // Second acquisition should succeed
         {
             let file = File::create(&lock_path).unwrap();
             assert!(file.lock_exclusive().is_ok());
         }
-
-        // Cleanup
         let _ = fs::remove_file(&lock_path);
     }
 
@@ -268,13 +250,9 @@ mod file_lock_tests {
 
         let lock_path = lock_dir.join("trylock_test.lock");
         let file = File::create(&lock_path).unwrap();
-
-        // Try lock should succeed on unlocked file
         assert!(file.try_lock_exclusive().is_ok());
 
         file.unlock().unwrap();
-
-        // Cleanup
         let _ = fs::remove_file(&lock_path);
     }
 }

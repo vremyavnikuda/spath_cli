@@ -10,3 +10,4 @@ pub mod formatter;
 pub mod migrator;
 pub mod registry;
 pub mod scanner;
+pub mod security;

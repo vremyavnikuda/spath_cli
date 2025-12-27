@@ -9,6 +9,7 @@ use tracing::{debug, info, warn};
 
 use crate::constants::{BACKUP_DIR_NAME, MAX_BACKUPS};
 use crate::registry::RegistryHelper;
+use crate::security::acl;
 
 /// Expands environment variables in a path string.
 ///
@@ -69,6 +70,8 @@ impl PathFixer {
         debug!("Backup file path: {}", backup_file.display());
         let json = serde_json::to_string_pretty(&backup).context("Failed to serialize backup")?;
         fs::write(&backup_file, json).context("Failed to write backup file")?;
+        acl::set_user_only_acl(&backup_file)
+            .context("Failed to set ACL on backup file. Backup created but may be accessible to other users.")?;
         info!("Backup created successfully: {}", backup_file.display());
         println!(
             "{} {}",

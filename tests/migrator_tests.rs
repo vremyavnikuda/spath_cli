@@ -1,8 +1,12 @@
+﻿use spath_cli::constants::{PROGRAM_FILES, WINDOWS_PATH};
+
 #[cfg(test)]
 mod migrator_tests {
+    use super::*;
+
     #[test]
     fn test_plan_duplicate_removal() {
-        let paths = ["C:\\Windows", "C:\\Windows"];
+        let paths = [WINDOWS_PATH, WINDOWS_PATH];
         let has_duplicates = paths[0] == paths[1];
         assert!(has_duplicates);
     }
@@ -21,8 +25,8 @@ mod migrator_tests {
 
     #[test]
     fn test_detect_duplicate_between_system_and_user() {
-        let system_path = "C:\\Windows";
-        let user_path = "C:\\Windows";
+        let system_path = WINDOWS_PATH;
+        let user_path = WINDOWS_PATH;
         assert_eq!(system_path.to_lowercase(), user_path.to_lowercase());
     }
 
@@ -41,8 +45,8 @@ mod migrator_tests {
 
     #[test]
     fn test_case_insensitive_duplicate_detection() {
-        let path1 = "C:\\Windows";
-        let path2 = "c:\\windows";
+        let path1 = WINDOWS_PATH;
+        let path2 = WINDOWS_PATH.to_lowercase();
         assert_eq!(path1.to_lowercase(), path2.to_lowercase());
     }
 
@@ -118,14 +122,14 @@ mod migrator_tests {
 
     #[test]
     fn test_add_quotes_during_migration() {
-        let path = "C:\\Program Files\\Test";
+        let path = format!("{}\\Test", PROGRAM_FILES);
         let quoted = format!("\"{}\"", path);
         assert!(quoted.starts_with('"'));
     }
 
     #[test]
     fn test_preserve_existing_quotes() {
-        let path = "\"C:\\Program Files\\Test\"";
+        let path = format!("\"{}\\Test\"", PROGRAM_FILES);
         assert!(path.starts_with('"') && path.ends_with('"'));
     }
 }

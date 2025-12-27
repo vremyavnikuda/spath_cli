@@ -11,6 +11,7 @@ mod formatter;
 mod migrator;
 mod registry;
 mod scanner;
+mod security;
 
 use analyzer::SystemAnalyzer;
 use fixer::PathFixer;
