@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use fs2::FileExt;
 use std::fs::{self, File};
 use std::path::PathBuf;
+use tracing::{debug, error, info, warn};
 use winreg::enums::*;
 use winreg::RegKey;
 
@@ -29,12 +30,14 @@ impl PathLockGuard {
     /// Acquires an exclusive lock on the specified lock file.
     /// Blocks until the lock is acquired.
     fn acquire(lock_name: &str) -> Result<Self> {
+        debug!("Attempting to acquire lock: {}", lock_name);
         let lock_dir = get_lock_dir()?;
         fs::create_dir_all(&lock_dir).context("Failed to create lock directory")?;
         let lock_path = lock_dir.join(lock_name);
         let file = File::create(&lock_path).context("Failed to create lock file")?;
         file.lock_exclusive()
             .context("Failed to acquire exclusive lock. Another spath process may be running.")?;
+        debug!("Lock acquired: {}", lock_name);
         Ok(Self { _file: file })
     }
 }
@@ -53,13 +56,18 @@ impl RegistryHelper {
     /// Reads SYSTEM PATH as raw string.
     /// May fail without administrator rights.
     pub fn read_system_path_raw() -> Result<String> {
+        debug!("Reading SYSTEM PATH from registry");
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        let env_key = hklm
-            .open_subkey(SYSTEM_ENV_KEY)
-            .context("Failed to open system environment key. Try running as administrator.")?;
-        env_key
-            .get_value("Path")
-            .context("Failed to read system PATH")
+        let env_key = hklm.open_subkey(SYSTEM_ENV_KEY).map_err(|e| {
+            warn!("Failed to open system environment key: {}", e);
+            anyhow::anyhow!("Failed to open system environment key. Try running as administrator.")
+        })?;
+        let path = env_key.get_value("Path").map_err(|e| {
+            error!("Failed to read system PATH: {}", e);
+            anyhow::anyhow!("Failed to read system PATH")
+        })?;
+        info!("Successfully read SYSTEM PATH");
+        Ok(path)
     }
 
     /// Reads SYSTEM PATH as `Vec<String>`.
@@ -72,13 +80,18 @@ impl RegistryHelper {
 
     /// Reads USER PATH as raw string.
     pub fn read_user_path_raw() -> Result<String> {
+        debug!("Reading USER PATH from registry");
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env_key = hkcu
-            .open_subkey(USER_ENV_KEY)
-            .context("Failed to open user environment key")?;
-        env_key
-            .get_value("Path")
-            .context("Failed to read user PATH")
+        let env_key = hkcu.open_subkey(USER_ENV_KEY).map_err(|e| {
+            error!("Failed to open user environment key: {}", e);
+            anyhow::anyhow!("Failed to open user environment key")
+        })?;
+        let path = env_key.get_value("Path").map_err(|e| {
+            error!("Failed to read user PATH: {}", e);
+            anyhow::anyhow!("Failed to read user PATH")
+        })?;
+        info!("Successfully read USER PATH");
+        Ok(path)
     }
 
     /// Reads USER PATH as `Vec<String>`.
@@ -93,6 +106,11 @@ impl RegistryHelper {
     /// Returns an error if the path exceeds MAX_PATH_LENGTH (2047 characters).
     pub fn validate_path_length(path: &str) -> Result<()> {
         if path.len() > MAX_PATH_LENGTH {
+            error!(
+                "PATH exceeds maximum length: {} > {}",
+                path.len(),
+                MAX_PATH_LENGTH
+            );
             bail!(
                 "PATH exceeds maximum length of {} characters (current: {} characters). \
                 Consider removing unused paths.",
@@ -100,6 +118,7 @@ impl RegistryHelper {
                 path.len()
             );
         }
+        debug!("PATH length validated: {} characters", path.len());
         Ok(())
     }
 
@@ -115,16 +134,23 @@ impl RegistryHelper {
     /// - Registry key cannot be opened for writing
     /// - Value cannot be written to registry
     pub fn write_user_path(path: &str) -> Result<()> {
+        debug!("Writing USER PATH to registry");
         let _lock = PathLockGuard::acquire(USER_PATH_LOCK)
             .context("Failed to acquire lock for USER PATH modification")?;
         Self::validate_path_length(path)?;
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let env_key = hkcu
             .open_subkey_with_flags(USER_ENV_KEY, KEY_WRITE)
-            .context("Failed to open user environment key for writing")?;
-        env_key
-            .set_value("Path", &path)
-            .context("Failed to write user PATH to registry")
+            .map_err(|e| {
+                error!("Failed to open user environment key for writing: {}", e);
+                anyhow::anyhow!("Failed to open user environment key for writing")
+            })?;
+        env_key.set_value("Path", &path).map_err(|e| {
+            error!("Failed to write user PATH to registry: {}", e);
+            anyhow::anyhow!("Failed to write user PATH to registry")
+        })?;
+        info!("Successfully wrote USER PATH to registry");
+        Ok(())
     }
 
     /// Writes SYSTEM PATH to registry with exclusive locking.
@@ -140,16 +166,25 @@ impl RegistryHelper {
     /// - Registry key cannot be opened (requires admin)
     /// - Value cannot be written to registry
     pub fn write_system_path(path: &str) -> Result<()> {
+        debug!("Writing SYSTEM PATH to registry");
         let _lock = PathLockGuard::acquire(SYSTEM_PATH_LOCK)
             .context("Failed to acquire lock for SYSTEM PATH modification")?;
         Self::validate_path_length(path)?;
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let env_key = hklm
             .open_subkey_with_flags(SYSTEM_ENV_KEY, KEY_READ | KEY_WRITE)
-            .context("Failed to open system environment key for writing (requires admin)")?;
-        env_key
-            .set_value("Path", &path)
-            .context("Failed to write system PATH to registry")
+            .map_err(|e| {
+                warn!("Failed to open system environment key for writing: {}", e);
+                anyhow::anyhow!(
+                    "Failed to open system environment key for writing (requires admin)"
+                )
+            })?;
+        env_key.set_value("Path", &path).map_err(|e| {
+            error!("Failed to write system PATH to registry: {}", e);
+            anyhow::anyhow!("Failed to write system PATH to registry")
+        })?;
+        info!("Successfully wrote SYSTEM PATH to registry");
+        Ok(())
     }
 
     /// Parses PATH string into `Vec<String>`, filtering empty entries.

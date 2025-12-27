@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::*;
 use std::io::{self, Write};
+use tracing_subscriber::EnvFilter;
 
 mod analyzer;
 mod constants;
@@ -107,6 +108,11 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+        )
+        .init();
     let cli = Cli::parse();
     match cli.command {
         Commands::Scan {

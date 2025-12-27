@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::env;
 use std::path::Path;
+use tracing::{debug, info, warn};
 
 use crate::constants::{PROGRAM_FILES, PROGRAM_FILES_X86, WINDOWS_PATH};
 use crate::registry::RegistryHelper;
@@ -87,7 +88,9 @@ impl PathScanner {
     }
 
     pub fn scan(&self) -> Result<ScanResults> {
+        info!("Starting PATH scan");
         let paths = RegistryHelper::parse_path_string(&self.path_var);
+        debug!("Found {} path entries to scan", paths.len());
         let mut issues = Vec::new();
         let mut audit = AuditStats {
             total_paths: paths.len(),
@@ -133,6 +136,7 @@ impl PathScanner {
                 if exists {
                     let is_exploitable = check_path_exploitable(trimmed);
                     if is_exploitable {
+                        warn!("Critical security issue found: {}", trimmed);
                         issues.push(PathIssue {
                             path: path.clone(),
                             level: IssueLevel::Critical,
@@ -175,6 +179,14 @@ impl PathScanner {
                 });
             }
         }
+        info!(
+            "Scan completed: {} issues found, {} critical",
+            issues.len(),
+            issues
+                .iter()
+                .filter(|i| matches!(i.level, IssueLevel::Critical))
+                .count()
+        );
         Ok(ScanResults {
             paths,
             issues,
