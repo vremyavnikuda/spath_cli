@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::env;
 use std::path::Path;
 
+use crate::constants::{PROGRAM_DATA, PROGRAM_FILES, PROGRAM_FILES_X86, USER_PATHS, WINDOWS_PATH};
 use crate::registry::RegistryHelper;
 
 #[derive(Debug, Clone)]
@@ -12,13 +13,9 @@ pub enum PathLocation {
 
 #[derive(Debug, Clone)]
 pub enum PathCategory {
-    // C:\Program Files, C:\Windows
     SystemProgram,
-    // C:\Users\username\...
     UserProgram,
-    // C:\ProgramData
     ProgramData,
-    // Unclear
     Ambiguous,
 }
 
@@ -50,28 +47,21 @@ pub struct SystemAnalyzer {
 impl SystemAnalyzer {
     pub fn new() -> Result<Self> {
         let current_username = env::var("USERNAME").context("Failed to get current username")?;
-
         Ok(Self { current_username })
     }
 
     pub fn analyze(&self) -> Result<AnalysisResults> {
         let system_paths = self.read_system_path()?;
         let user_paths = self.read_user_path()?;
-
         let mut entries = Vec::new();
-
-        // Analyze SYSTEM PATH
         for path in system_paths {
             let entry = self.analyze_path(&path, PathLocation::System);
             entries.push(entry);
         }
-
-        // Analyze USER PATH
         for path in user_paths {
             let entry = self.analyze_path(&path, PathLocation::User);
             entries.push(entry);
         }
-
         Ok(AnalysisResults {
             entries,
             current_username: self.current_username.clone(),
@@ -91,9 +81,7 @@ impl SystemAnalyzer {
         let has_spaces = path.contains(' ');
         let is_quoted = path.starts_with('"') && path.ends_with('"');
         let exists = Path::new(trimmed).exists();
-
         let category = self.categorize_path(trimmed);
-
         PathEntry {
             path: path.to_string(),
             location,
@@ -106,34 +94,21 @@ impl SystemAnalyzer {
 
     fn categorize_path(&self, path: &str) -> PathCategory {
         let lower = path.to_lowercase();
-
-        // System programs
-        if lower.starts_with("c:\\windows")
-            || lower.starts_with("c:\\program files")
-            || lower.starts_with("c:\\program files (x86)")
+        if lower.starts_with(WINDOWS_PATH)
+            || lower.starts_with(PROGRAM_FILES)
+            || lower.starts_with(PROGRAM_FILES_X86)
         {
             return PathCategory::SystemProgram;
         }
-
-        // User programs
-        if lower.contains(&format!(
-            "c:\\users\\{}",
-            self.current_username.to_lowercase()
-        )) || lower.contains("\\appdata\\")
-            || lower.contains("\\.cargo\\")
-            || lower.contains("\\.dotnet\\")
-            || lower.contains("\\.npm\\")
-            || lower.contains("\\.bun\\")
-            || lower.contains("\\.local\\")
+        let user_path_prefix = format!("c:\\users\\{}", self.current_username.to_lowercase());
+        if lower.contains(&user_path_prefix)
+            || USER_PATHS.iter().any(|pattern| lower.contains(pattern))
         {
             return PathCategory::UserProgram;
         }
-
-        // ProgramData (shared but not system)
-        if lower.starts_with("c:\\programdata") {
+        if lower.starts_with(PROGRAM_DATA) {
             return PathCategory::ProgramData;
         }
-
         PathCategory::Ambiguous
     }
 }

@@ -1,5 +1,9 @@
+﻿use spath_cli::constants::PROGRAM_FILES;
+
 #[cfg(test)]
 mod fixer_tests {
+    use super::*;
+
     #[test]
     fn test_backup_directory_creation() {
         let path = std::path::PathBuf::from("test_backup");
@@ -22,21 +26,24 @@ mod fixer_tests {
 
     #[test]
     fn test_backup_json_format_valid() {
-        let json = r#"{"timestamp":"20241213","user_path":"C:\\Windows"}"#;
+        let json = format!(
+            r#"{{"timestamp":"20241213","user_path":"{}"}}"#,
+            spath_cli::constants::WINDOWS_PATH
+        );
         assert!(json.contains("timestamp"));
         assert!(json.contains("user_path"));
     }
 
     #[test]
     fn test_add_quotes_to_unquoted_path() {
-        let path = "C:\\Program Files\\Test";
-        let expected = "\"C:\\Program Files\\Test\"";
+        let path = format!("{}\\Test", PROGRAM_FILES);
+        let expected = format!("\"{}\\Test\"", PROGRAM_FILES);
         assert_eq!(format!("\"{}\"", path), expected);
     }
 
     #[test]
     fn test_dont_add_quotes_to_quoted_path() {
-        let path = "\"C:\\Program Files\\Test\"";
+        let path = format!("\"{}\\Test\"", PROGRAM_FILES);
         assert!(path.starts_with('"'));
     }
 
@@ -48,7 +55,11 @@ mod fixer_tests {
 
     #[test]
     fn test_remove_duplicate_paths() {
-        let paths = vec!["C:\\Windows", "C:\\Windows", "C:\\System32"];
+        let paths = vec![
+            spath_cli::constants::WINDOWS_PATH,
+            spath_cli::constants::WINDOWS_PATH,
+            "C:\\System32",
+        ];
         let unique: std::collections::HashSet<_> = paths.into_iter().collect();
         assert_eq!(unique.len(), 2);
     }

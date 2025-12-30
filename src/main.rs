@@ -2,13 +2,17 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::*;
 use std::io::{self, Write};
+use tracing_subscriber::EnvFilter;
 
 mod analyzer;
+mod constants;
 mod fixer;
 mod formatter;
 mod migrator;
 mod registry;
 mod scanner;
+mod security;
+mod visualizer;
 
 use analyzer::SystemAnalyzer;
 use fixer::PathFixer;
@@ -19,10 +23,8 @@ use scanner::PathScanner;
 fn ask_confirmation(message: &str) -> bool {
     print!("{} [y/N]: ", message);
     io::stdout().flush().unwrap();
-
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
-
     let answer = input.trim().to_lowercase();
     answer == "y" || answer == "yes"
 }
@@ -105,11 +107,34 @@ enum Commands {
         #[arg(short, long)]
         system: bool,
     },
+
+    /// Visualize PATH structure
+    Visualize {
+        /// Use tree view
+        #[arg(short, long)]
+        tree: bool,
+
+        /// Show only SYSTEM PATH
+        #[arg(short, long)]
+        system: bool,
+
+        /// Show only USER PATH
+        #[arg(short, long)]
+        user: bool,
+
+        /// Disable colored output
+        #[arg(long)]
+        no_color: bool,
+    },
 }
 
 fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+        )
+        .init();
     let cli = Cli::parse();
-
     match cli.command {
         Commands::Scan {
             verbose,
@@ -117,33 +142,23 @@ fn main() -> Result<()> {
             system,
         } => {
             println!("{}", "spath - Windows PATH Security Scanner".bold().cyan());
-            println!();
-
             if system {
                 println!(
                     "{}",
                     "Scanning SYSTEM PATH (requires admin rights to fix)".yellow()
                 );
-                println!();
             }
-
             let scanner = PathScanner::new(system)?;
             let results = scanner.scan()?;
-
             ConsoleFormatter::print_scan_results(&results, verbose);
-
-            println!();
             ConsoleFormatter::print_scan_summary(&results);
-
             if audit {
                 ConsoleFormatter::print_scan_audit(&results);
             }
         }
-
         Commands::Fix { dry_run, delicate } => {
             println!("{}", "spath - PATH Fixer".bold().cyan());
             println!();
-
             if dry_run {
                 println!(
                     "{}",
@@ -151,11 +166,8 @@ fn main() -> Result<()> {
                         .yellow()
                         .bold()
                 );
-                println!();
             }
-
             let fixer = PathFixer::new()?;
-
             if delicate && !dry_run {
                 println!(
                     "{}",
@@ -166,74 +178,54 @@ fn main() -> Result<()> {
                     println!("{}", "Operation cancelled.".yellow());
                     return Ok(());
                 }
-                println!();
             }
-
             let results = fixer.fix_user_path(dry_run)?;
-
             ConsoleFormatter::print_fix_results(&results);
         }
-
         Commands::Backup => {
             println!("{}", "spath - Create Backup".bold().cyan());
             println!();
-
             let fixer = PathFixer::new()?;
             fixer.create_backup()?;
         }
-
         Commands::ListBackups => {
             println!("{}", "spath - Available Backups".bold().cyan());
-            println!();
-
             let fixer = PathFixer::new()?;
             let backups = fixer.list_backups()?;
-
             if backups.is_empty() {
                 println!("{}", "No backups found.".yellow());
             } else {
                 println!("Found {} backup(s):", backups.len());
-                println!();
                 for backup in backups {
                     println!("  {}", backup.display());
                 }
             }
         }
-
         Commands::Restore {
             backup_file,
             delicate,
         } => {
             println!("{}", "spath - Restore Backup".bold().cyan());
             println!();
-
             let fixer = PathFixer::new()?;
             let backup_path = std::path::PathBuf::from(&backup_file);
-
             if delicate {
                 println!("{}", "Delicate mode: Confirm restore operation.".cyan());
                 println!("This will replace your current PATH with the backup.");
-                println!();
                 if !ask_confirmation(&format!("Restore from {}?", backup_path.display())) {
                     println!("{}", "Operation cancelled.".yellow());
                     return Ok(());
                 }
                 println!();
             }
-
             fixer.restore_backup(&backup_path)?;
         }
-
         Commands::Analyze => {
             println!("{}", "spath - System PATH Analyzer".bold().cyan());
-            println!();
-
             let analyzer = SystemAnalyzer::new()?;
             let results = analyzer.analyze()?;
-
             ConsoleFormatter::print_analysis_results(&results);
         }
-
         Commands::Clean {
             system,
             dry_run,
@@ -241,7 +233,6 @@ fn main() -> Result<()> {
         } => {
             println!("{}", "spath - PATH Cleanup".bold().cyan());
             println!();
-
             if dry_run {
                 println!(
                     "{}",
@@ -251,26 +242,19 @@ fn main() -> Result<()> {
                 );
                 println!();
             }
-
             let migrator = PathMigrator::new()?;
             let plan = migrator.plan_migration(true, system)?;
-
             ConsoleFormatter::print_migration_plan(&plan, dry_run);
-
             if !dry_run && !plan.actions.is_empty() {
                 println!();
-
                 if delicate {
                     println!("{}", "Delicate mode: Confirm the cleanup operation.".cyan());
                     if !ask_confirmation("Apply these changes?") {
                         println!("{}", "Operation cancelled.".yellow());
                         return Ok(());
                     }
-                    println!();
                 }
-
                 migrator.execute_migration(&plan, dry_run)?;
-                println!();
                 println!("{}", "Cleanup completed.".green().bold());
                 println!(
                     "{}",
@@ -279,33 +263,24 @@ fn main() -> Result<()> {
                 );
             }
         }
-
         Commands::Verify { system } => {
             println!("{}", "spath - Security Verification".bold().cyan());
-            println!();
-
             if system {
                 println!("{}", "Verifying SYSTEM PATH security...".yellow());
             } else {
                 println!("{}", "Verifying USER PATH security...".yellow());
             }
-            println!();
-
             let scanner = PathScanner::new(system)?;
             let results = scanner.scan()?;
-
-            // Filter only critical issues
             let critical_issues: Vec<_> = results
                 .issues
                 .iter()
                 .filter(|issue| matches!(issue.level, scanner::IssueLevel::Critical))
                 .collect();
-
             if critical_issues.is_empty() {
                 println!("{}", "✓ No critical security issues found!".green().bold());
                 return Ok(());
             }
-
             println!(
                 "{}",
                 format!(
@@ -314,11 +289,8 @@ fn main() -> Result<()> {
                 )
                 .yellow()
             );
-            println!();
-
             let mut real_threats = 0;
             let mut false_positives = 0;
-
             for issue in &critical_issues {
                 let path = &issue.path;
                 let exploit_paths = generate_exploit_paths(path);
@@ -328,7 +300,6 @@ fn main() -> Result<()> {
                         found_exploits.push(exploit_path.clone());
                     }
                 }
-
                 if found_exploits.is_empty() {
                     false_positives += 1;
                     println!("{} {}", "✓".green(), path);
@@ -346,7 +317,6 @@ fn main() -> Result<()> {
                 }
                 println!();
             }
-
             println!();
             println!("{}", "Verification Summary:".bold());
             println!("  Total critical issues: {}", critical_issues.len());
@@ -360,7 +330,6 @@ fn main() -> Result<()> {
                 "✓".green(),
                 false_positives
             );
-
             if real_threats > 0 {
                 println!();
                 println!("{}", "⚠ IMMEDIATE ACTION REQUIRED!".red().bold());
@@ -373,8 +342,62 @@ fn main() -> Result<()> {
                 println!("  Consider fixing these issues to prevent future attacks.");
             }
         }
+        Commands::Visualize {
+            tree,
+            system,
+            user,
+            no_color,
+        } => {
+            let use_color = !no_color && atty::is(atty::Stream::Stdout);
+            let (system_paths, user_paths) = if system || user {
+                let sys = if system || !user {
+                    registry::RegistryHelper::read_system_path().unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                let usr = if user || !system {
+                    registry::RegistryHelper::read_user_path().unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                (sys, usr)
+            } else {
+                (
+                    registry::RegistryHelper::read_system_path().unwrap_or_default(),
+                    registry::RegistryHelper::read_user_path().unwrap_or_default(),
+                )
+            };
+            if system && !user {
+                println!("{}", "SYSTEM PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&system_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&system_paths, use_color);
+                }
+            } else if user && !system {
+                println!("{}", "USER PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&user_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&user_paths, use_color);
+                }
+            } else {
+                println!("{}", "SYSTEM PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&system_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&system_paths, use_color);
+                }
+                println!();
+                println!("{}", "USER PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&user_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&user_paths, use_color);
+                }
+            }
+        }
     }
-
     Ok(())
 }
 
@@ -385,33 +408,20 @@ fn main() -> Result<()> {
 /// - `C:\Program Files\App.exe`, etc.
 fn generate_exploit_paths(path: &str) -> Vec<String> {
     let mut exploits = Vec::new();
-    let path_lower = path.to_lowercase();
     let clean_path = path.trim_matches('"');
-    let parts: Vec<&str> = clean_path.split(' ').collect();
-    if parts.len() < 2 {
+    let parts: Vec<&str> = clean_path.split('\\').collect();
+    if parts.is_empty() {
         return exploits;
     }
-    if path_lower.starts_with("c:\\program files") {
-        exploits.push("C:\\Program.exe".to_string());
-        exploits.push("C:\\Program.com".to_string());
-        exploits.push("C:\\Program.bat".to_string());
-        exploits.push("C:\\Program.cmd".to_string());
-    }
-    if path_lower.contains("\\common files") {
-        exploits.push("C:\\Program Files\\Common.exe".to_string());
-        exploits.push("C:\\Program Files\\Common.com".to_string());
-        exploits.push("C:\\Program Files (x86)\\Common.exe".to_string());
-        exploits.push("C:\\Program Files (x86)\\Common.com".to_string());
-    }
+    let extensions = [".exe", ".com", ".bat", ".cmd"];
     let mut accumulated = String::new();
     for (i, part) in parts.iter().enumerate() {
         if i > 0 {
-            accumulated.push(' ');
+            accumulated.push('\\');
         }
         accumulated.push_str(part);
-
-        if i < parts.len() - 1 {
-            for ext in &[".exe", ".com", ".bat", ".cmd"] {
+        if i < parts.len() - 1 && part.contains(' ') {
+            for ext in &extensions {
                 exploits.push(format!("{}{}", accumulated, ext));
             }
         }

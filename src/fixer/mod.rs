@@ -5,8 +5,11 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{debug, info, warn};
 
+use crate::constants::{BACKUP_DIR_NAME, MAX_BACKUPS};
 use crate::registry::RegistryHelper;
+use crate::security::acl;
 
 /// Expands environment variables in a path string.
 ///
@@ -26,7 +29,6 @@ fn expand_env_vars(path: &str) -> String {
             break;
         }
     }
-
     result
 }
 
@@ -45,56 +47,54 @@ impl PathFixer {
     pub fn new() -> Result<Self> {
         let local_app_data =
             env::var("LOCALAPPDATA").context("Failed to get LOCALAPPDATA environment variable")?;
-
-        let backup_dir = PathBuf::from(local_app_data).join("spath").join("backups");
-
+        let backup_dir = PathBuf::from(local_app_data)
+            .join("spath")
+            .join(BACKUP_DIR_NAME);
         fs::create_dir_all(&backup_dir).context("Failed to create backup directory")?;
-
         Ok(Self { backup_dir })
     }
 
     pub fn create_backup(&self) -> Result<PathBuf> {
+        info!("Creating PATH backup");
         let user_path = RegistryHelper::read_user_path_raw()
             .context("Failed to read user PATH from registry")?;
-
-        // Try to read system PATH
         let system_path = RegistryHelper::read_system_path_raw().ok();
-
         let backup = PathBackup {
             timestamp: chrono::Local::now().format("%Y%m%d_%H%M%S").to_string(),
             user_path,
             system_path,
         };
-
         let backup_file = self
             .backup_dir
             .join(format!("path_backup_{}.json", backup.timestamp));
+        debug!("Backup file path: {}", backup_file.display());
         let json = serde_json::to_string_pretty(&backup).context("Failed to serialize backup")?;
-
         fs::write(&backup_file, json).context("Failed to write backup file")?;
-
+        acl::set_user_only_acl(&backup_file)
+            .context("Failed to set ACL on backup file. Backup created but may be accessible to other users.")?;
+        info!("Backup created successfully: {}", backup_file.display());
         println!(
             "{} {}",
             "Backup created:".green().bold(),
             backup_file.display()
         );
-
+        self.cleanup_old_backups()?;
         Ok(backup_file)
     }
 
     pub fn fix_user_path(&self, dry_run: bool) -> Result<FixResults> {
+        info!("Starting USER PATH fix (dry_run: {})", dry_run);
         let current_path = RegistryHelper::read_user_path_raw()
             .context("Failed to read user PATH from registry")?;
-
         let paths = RegistryHelper::parse_path_string(&current_path);
-
+        debug!("Found {} path entries to process", paths.len());
         let mut fixed_paths = Vec::new();
         let mut changes = Vec::new();
         let mut seen = HashSet::new();
-
         for path in paths {
             let trimmed = path.trim();
             if seen.contains(trimmed) {
+                warn!("Duplicate path found: {}", trimmed);
                 changes.push(format!("Removed duplicate: {}", trimmed));
                 continue;
             }
@@ -107,38 +107,37 @@ impl PathFixer {
                     let expanded_exists = Path::new(&expanded).exists();
                     !expanded_exists || expanded == trimmed
                 } else {
-                    // Non-existent path without variables - remove
                     true
                 }
             } else {
                 false
             };
-
             if should_remove {
+                warn!("Non-existent path found: {}", trimmed);
                 changes.push(format!("Removed non-existent: {}", trimmed));
                 continue;
             }
-
             if trimmed.contains(' ') && !trimmed.starts_with('"') {
                 let quoted = format!("\"{}\"", trimmed);
+                info!("Adding quotes to path: {}", trimmed);
                 changes.push(format!("Added quotes: {} -> {}", trimmed, quoted));
                 fixed_paths.push(quoted);
             } else {
                 fixed_paths.push(trimmed.to_string());
             }
         }
-
         let new_path = fixed_paths.join(";");
         let changed = new_path != current_path;
-
+        info!(
+            "PATH fix completed: {} changes, changed: {}",
+            changes.len(),
+            changed
+        );
         if !dry_run && changed {
-            // Create backup before making changes
             self.create_backup()?;
-
-            // Write new PATH to registry
             RegistryHelper::write_user_path(&new_path)
                 .context("Failed to write new PATH to registry")?;
-
+            info!("PATH successfully updated in registry");
             println!();
             println!("{}", "PATH has been fixed.".green().bold());
             println!(
@@ -146,7 +145,6 @@ impl PathFixer {
                 "  Note: You may need to restart applications for changes to take effect.".yellow()
             );
         }
-
         Ok(FixResults {
             changes,
             dry_run,
@@ -156,11 +154,9 @@ impl PathFixer {
 
     pub fn list_backups(&self) -> Result<Vec<PathBuf>> {
         let mut backups = Vec::new();
-
         if !self.backup_dir.exists() {
             return Ok(backups);
         }
-
         for entry in fs::read_dir(&self.backup_dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -168,31 +164,48 @@ impl PathFixer {
                 backups.push(path);
             }
         }
-
         backups.sort();
         backups.reverse();
-
         Ok(backups)
     }
 
+    /// Cleanup old backups, keeping only the most recent MAX_BACKUPS files
+    fn cleanup_old_backups(&self) -> Result<()> {
+        let mut backups = self.list_backups()?;
+        if backups.len() > MAX_BACKUPS {
+            info!(
+                "Cleaning up old backups: {} > {}",
+                backups.len(),
+                MAX_BACKUPS
+            );
+        }
+        while backups.len() > MAX_BACKUPS {
+            if let Some(oldest) = backups.pop() {
+                debug!("Removing old backup: {}", oldest.display());
+                fs::remove_file(&oldest).with_context(|| {
+                    format!("Failed to remove old backup: {}", oldest.display())
+                })?;
+                info!("Removed old backup: {}", oldest.display());
+                println!("{} Removed old backup: {}", "✓".green(), oldest.display());
+            }
+        }
+        Ok(())
+    }
+
     pub fn restore_backup(&self, backup_file: &PathBuf) -> Result<()> {
-        // Validate backup file path to prevent path traversal attacks
+        info!("Restoring PATH from backup: {}", backup_file.display());
         self.validate_backup_path(backup_file)?;
-
         let json = fs::read_to_string(backup_file).context("Failed to read backup file")?;
-
         let backup: PathBackup =
             serde_json::from_str(&json).context("Failed to parse backup file")?;
-
         RegistryHelper::write_user_path(&backup.user_path)
             .context("Failed to restore PATH from backup")?;
-
+        info!("PATH successfully restored from backup");
         println!("{}", "PATH restored from backup.".green().bold());
         println!(
             "{}",
             "  Note: You may need to restart applications for changes to take effect.".yellow()
         );
-
         Ok(())
     }
 
@@ -203,18 +216,13 @@ impl PathFixer {
     /// 3. File name matches expected pattern
     fn validate_backup_path(&self, backup_file: &Path) -> Result<()> {
         use anyhow::bail;
-
-        // Canonicalize paths to resolve any .. or symlinks
         let canonical_backup_dir = self
             .backup_dir
             .canonicalize()
             .context("Failed to resolve backup directory path")?;
-
         let canonical_file = backup_file
             .canonicalize()
             .context("Backup file does not exist or path is invalid")?;
-
-        // Check that file is within backup directory
         if !canonical_file.starts_with(&canonical_backup_dir) {
             bail!(
                 "Security error: Backup file must be located in {}\n\
@@ -222,13 +230,9 @@ impl PathFixer {
                 self.backup_dir.display()
             );
         }
-
-        // Check file extension
         if backup_file.extension().and_then(|s| s.to_str()) != Some("json") {
             bail!("Security error: Backup file must have .json extension");
         }
-
-        // Check file name pattern (path_backup_YYYYMMDD_HHMMSS.json)
         if let Some(file_name) = backup_file.file_name().and_then(|s| s.to_str()) {
             if !file_name.starts_with("path_backup_") {
                 bail!(
@@ -239,7 +243,6 @@ impl PathFixer {
         } else {
             bail!("Security error: Invalid backup file name");
         }
-
         Ok(())
     }
 }

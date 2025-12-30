@@ -1,9 +1,12 @@
+﻿use spath_cli::constants::WINDOWS_PATH;
+
 #[cfg(test)]
 mod path_utils_tests {
+    use super::*;
+
     #[test]
     fn test_normalize_path_lowercase() {
-        let path = "C:\\Windows";
-        assert_eq!(path.to_lowercase(), "c:\\windows");
+        assert_eq!(WINDOWS_PATH.to_lowercase(), WINDOWS_PATH);
     }
 
     #[test]
@@ -20,8 +23,7 @@ mod path_utils_tests {
 
     #[test]
     fn test_path_no_spaces() {
-        let path = "C:\\Windows";
-        assert!(!path.contains(' '));
+        assert!(!WINDOWS_PATH.contains(' '));
     }
 
     #[test]
@@ -38,8 +40,7 @@ mod path_utils_tests {
 
     #[test]
     fn test_path_is_absolute() {
-        let path = "C:\\Windows";
-        assert!(path.contains(':'));
+        assert!(WINDOWS_PATH.contains(':'));
     }
 
     #[test]
@@ -50,30 +51,29 @@ mod path_utils_tests {
 
     #[test]
     fn test_split_path_by_semicolon() {
-        let paths = "C:\\Windows;C:\\System32";
+        let paths = format!("{};C:\\System32", WINDOWS_PATH);
         let split: Vec<&str> = paths.split(';').collect();
         assert_eq!(split.len(), 2);
     }
 
     #[test]
     fn test_join_paths_with_semicolon() {
-        let paths = ["C:\\Windows", "C:\\System32"];
+        let paths = [WINDOWS_PATH, "C:\\System32"];
         let joined = paths.join(";");
-        assert_eq!(joined, "C:\\Windows;C:\\System32");
+        assert_eq!(joined, format!("{};C:\\System32", WINDOWS_PATH));
     }
 
     #[test]
     fn test_empty_path_filter() {
-        let paths = "C:\\Windows;;C:\\System32";
+        let paths = format!("{};;C:\\System32", WINDOWS_PATH);
         let filtered: Vec<&str> = paths.split(';').filter(|s| !s.is_empty()).collect();
         assert_eq!(filtered.len(), 2);
     }
 
     #[test]
     fn test_path_comparison_case_insensitive() {
-        let path1 = "C:\\Windows";
-        let path2 = "c:\\windows";
-        assert_eq!(path1.to_lowercase(), path2.to_lowercase());
+        let path2 = WINDOWS_PATH.to_lowercase();
+        assert_eq!(WINDOWS_PATH.to_lowercase(), path2.to_lowercase());
     }
 }
 

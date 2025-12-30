@@ -91,6 +91,24 @@ spath clean --system          # Clean SYSTEM PATH (requires admin)
 spath clean --delicate        # Ask for confirmation
 ```
 
+### Visualize
+
+Display PATH structure with visual indicators.
+
+```bash
+spath visualize               # Simple list view with status indicators
+spath visualize --tree        # Tree view showing directory hierarchy
+spath visualize --user        # Show only USER PATH
+spath visualize --system      # Show only SYSTEM PATH
+spath visualize --no-color    # Disable color output
+```
+
+Visual indicators:
+- ✓ (green) - Path exists and is valid
+- ✗ (red) - Path does not exist
+- ⚠ (yellow) - Path has issues (unquoted spaces, duplicates)
+- (cyan) - User-specific paths
+
 ### Backup Management
 
 ```bash

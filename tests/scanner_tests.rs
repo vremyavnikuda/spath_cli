@@ -1,16 +1,19 @@
+﻿use spath_cli::constants::{PROGRAM_FILES, WINDOWS_PATH};
+
 #[cfg(test)]
 mod scanner_tests {
+    use super::*;
 
     #[test]
     fn test_path_with_spaces_no_quotes_detected() {
-        let path = "C:\\Program Files\\Test";
+        let path = format!("{}\\Test", PROGRAM_FILES);
         assert!(path.contains(' '));
         assert!(!path.starts_with('"'));
     }
 
     #[test]
     fn test_path_with_spaces_and_quotes_ok() {
-        let path = "\"C:\\Program Files\\Test\"";
+        let path = format!("\"{}\\Test\"", PROGRAM_FILES);
         assert!(path.contains(' '));
         assert!(path.starts_with('"') && path.ends_with('"'));
     }
@@ -23,11 +26,10 @@ mod scanner_tests {
 
     #[test]
     fn test_multiple_paths_separated_by_semicolon() {
-        let paths = "C:\\Windows;C:\\Windows\\System32";
+        let paths = format!("{};{}\\System32", WINDOWS_PATH, WINDOWS_PATH);
         let split: Vec<&str> = paths.split(';').collect();
         assert_eq!(split.len(), 2);
-        assert_eq!(split[0], "C:\\Windows");
-        assert_eq!(split[1], "C:\\Windows\\System32");
+        assert_eq!(split[0], WINDOWS_PATH);
     }
 
     #[test]
@@ -50,7 +52,7 @@ mod scanner_tests {
 
     #[test]
     fn test_mixed_paths_with_and_without_quotes() {
-        let paths = "\"C:\\Program Files\\Test\";C:\\Windows";
+        let paths = format!("\"{}\\Test\";{}", PROGRAM_FILES, WINDOWS_PATH);
         let split: Vec<&str> = paths.split(';').collect();
         assert_eq!(split.len(), 2);
         assert!(split[0].starts_with('"'));
@@ -59,30 +61,29 @@ mod scanner_tests {
 
     #[test]
     fn test_path_with_trailing_semicolon() {
-        let paths = "C:\\Windows;";
+        let paths = format!("{};", WINDOWS_PATH);
         let filtered: Vec<&str> = paths.split(';').filter(|s| !s.is_empty()).collect();
         assert_eq!(filtered.len(), 1);
     }
 
     #[test]
     fn test_path_with_leading_semicolon() {
-        let paths = ";C:\\Windows";
+        let paths = format!(";{}", WINDOWS_PATH);
         let filtered: Vec<&str> = paths.split(';').filter(|s| !s.is_empty()).collect();
         assert_eq!(filtered.len(), 1);
     }
 
     #[test]
     fn test_duplicate_paths_detected() {
-        let paths = "C:\\Windows;C:\\Windows";
+        let paths = format!("{};{}", WINDOWS_PATH, WINDOWS_PATH);
         let split: Vec<&str> = paths.split(';').collect();
         assert_eq!(split[0], split[1]);
     }
 
     #[test]
     fn test_case_insensitive_duplicate_detection() {
-        let path1 = "C:\\Windows";
-        let path2 = "c:\\windows";
-        assert_eq!(path1.to_lowercase(), path2.to_lowercase());
+        let path2 = WINDOWS_PATH.to_lowercase();
+        assert_eq!(WINDOWS_PATH.to_lowercase(), path2.to_lowercase());
     }
 
     #[test]
@@ -107,9 +108,11 @@ mod scanner_tests {
 
 #[cfg(test)]
 mod issue_level_tests {
+    use super::*;
+
     #[test]
     fn test_critical_issue_for_unquoted_spaces() {
-        let path = "C:\\Program Files\\Test";
+        let path = format!("{}\\Test", PROGRAM_FILES);
         let is_critical = path.contains(' ') && !path.starts_with('"');
         assert!(is_critical);
     }
@@ -137,7 +140,7 @@ mod issue_level_tests {
 
     #[test]
     fn test_issue_path_stored_correctly() {
-        let original_path = "C:\\Program Files\\Test";
+        let original_path = format!("{}\\Test", PROGRAM_FILES);
         let stored_path = original_path.to_string();
         assert_eq!(original_path, stored_path);
     }

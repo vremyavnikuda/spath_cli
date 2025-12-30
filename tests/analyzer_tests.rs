@@ -1,8 +1,12 @@
+﻿use spath_cli::constants::{PROGRAM_DATA, PROGRAM_FILES};
+
 #[cfg(test)]
 mod analyzer_tests {
+    use super::*;
+
     #[test]
     fn test_categorize_system_program() {
-        let path = "C:\\Program Files\\Test";
+        let path = format!("{}\\Test", PROGRAM_FILES);
         assert!(path.to_lowercase().starts_with("c:\\program files"));
     }
 
@@ -14,7 +18,7 @@ mod analyzer_tests {
 
     #[test]
     fn test_categorize_program_data() {
-        let path = "C:\\ProgramData\\Test";
+        let path = format!("{}\\Test", PROGRAM_DATA);
         assert!(path.to_lowercase().starts_with("c:\\programdata"));
     }
 
@@ -34,15 +38,15 @@ mod analyzer_tests {
 
     #[test]
     fn test_detect_system_path_in_user() {
-        let path = "C:\\Program Files\\Tool";
+        let path = format!("{}\\Tool", PROGRAM_FILES);
         let in_user = true;
-        let is_system_path = path.contains("Program Files");
+        let is_system_path = path.to_lowercase().contains("program files");
         assert!(in_user && is_system_path);
     }
 
     #[test]
     fn test_path_needs_quotes_with_spaces() {
-        let path = "C:\\Program Files\\Test";
+        let path = format!("{}\\Test", PROGRAM_FILES);
         assert!(path.contains(' '));
     }
 
@@ -54,8 +58,7 @@ mod analyzer_tests {
 
     #[test]
     fn test_path_exists_check() {
-        let path = "C:\\Windows";
-        let exists = std::path::Path::new(path).exists();
+        let exists = std::path::Path::new(spath_cli::constants::WINDOWS_PATH).exists();
         assert!(exists);
     }
 
