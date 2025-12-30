@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-12-30
+
+### Added
+- New `visualize` command to display PATH structure with visual indicators
+  - Simple list view with status indicators (✓ exists, ✗ missing, ⚠ issues)
+  - Tree view (`--tree`) showing directory hierarchy
+  - Color coding: green (valid), red (missing), yellow (issues), cyan (user-specific)
+  - Flags: `--user`, `--system`, `--no-color`
+  - Automatic detection of issues (non-existent paths, unquoted spaces, duplicates)
+  - Summary statistics and legend
+
+### Changed
+- Code quality improvements:
+  - Replaced hardcoded values with constants across all modules
+- Enhanced logging:
+  - Added structured logging with `tracing`
+  - Log levels: ERROR (registry failures), WARN (vulnerabilities), INFO (operations), DEBUG (details)
+  - Controllable via `RUST_LOG` environment variable
+- Security improvements:
+  - Added ACL protection for backup files
+  - Backup files now accessible only to current user
+  - Windows API integration for DACL management
+
+### Dependencies
+- Added `tracing` and `tracing-subscriber` for structured logging
+- Added `atty` for terminal detection
+- Added `windows` crate features for security APIs
+
+### Documentation
+- Updated with `visualize` command
+
 ## [0.1.1] - 2025-12-20
 
 ### Added
