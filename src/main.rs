@@ -12,6 +12,7 @@ mod migrator;
 mod registry;
 mod scanner;
 mod security;
+mod visualizer;
 
 use analyzer::SystemAnalyzer;
 use fixer::PathFixer;
@@ -105,6 +106,25 @@ enum Commands {
         /// Include SYSTEM PATH in verification
         #[arg(short, long)]
         system: bool,
+    },
+
+    /// Visualize PATH structure
+    Visualize {
+        /// Use tree view
+        #[arg(short, long)]
+        tree: bool,
+
+        /// Show only SYSTEM PATH
+        #[arg(short, long)]
+        system: bool,
+
+        /// Show only USER PATH
+        #[arg(short, long)]
+        user: bool,
+
+        /// Disable colored output
+        #[arg(long)]
+        no_color: bool,
     },
 }
 
@@ -320,6 +340,61 @@ fn main() -> Result<()> {
                 println!("{}", "Current Status: SAFE".green().bold());
                 println!("  No active exploits detected, but paths are vulnerable.");
                 println!("  Consider fixing these issues to prevent future attacks.");
+            }
+        }
+        Commands::Visualize {
+            tree,
+            system,
+            user,
+            no_color,
+        } => {
+            let use_color = !no_color && atty::is(atty::Stream::Stdout);
+            let (system_paths, user_paths) = if system || user {
+                let sys = if system || !user {
+                    registry::RegistryHelper::read_system_path().unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                let usr = if user || !system {
+                    registry::RegistryHelper::read_user_path().unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                (sys, usr)
+            } else {
+                (
+                    registry::RegistryHelper::read_system_path().unwrap_or_default(),
+                    registry::RegistryHelper::read_user_path().unwrap_or_default(),
+                )
+            };
+            if system && !user {
+                println!("{}", "SYSTEM PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&system_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&system_paths, use_color);
+                }
+            } else if user && !system {
+                println!("{}", "USER PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&user_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&user_paths, use_color);
+                }
+            } else {
+                println!("{}", "SYSTEM PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&system_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&system_paths, use_color);
+                }
+                println!();
+                println!("{}", "USER PATH".bold().cyan());
+                if tree {
+                    visualizer::visualize_tree(&user_paths, use_color);
+                } else {
+                    visualizer::visualize_simple(&user_paths, use_color);
+                }
             }
         }
     }

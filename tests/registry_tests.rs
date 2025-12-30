@@ -186,10 +186,8 @@ mod lock_tests {
     fn test_lock_file_creation() {
         let lock_dir = get_lock_dir().unwrap();
         fs::create_dir_all(&lock_dir).unwrap();
-
         let lock_file = lock_dir.join("test_registry.lock");
         fs::write(&lock_file, "test").unwrap();
-
         assert!(lock_file.exists());
         let _ = fs::remove_file(&lock_file);
     }
@@ -218,7 +216,6 @@ mod file_lock_tests {
     fn test_exclusive_lock_acquire_and_release() {
         let lock_dir = get_test_lock_dir();
         fs::create_dir_all(&lock_dir).unwrap();
-
         let lock_path = lock_dir.join("exclusive_test.lock");
         let file = File::create(&lock_path).unwrap();
         assert!(file.lock_exclusive().is_ok());
@@ -230,7 +227,6 @@ mod file_lock_tests {
     fn test_lock_reacquire_after_release() {
         let lock_dir = get_test_lock_dir();
         fs::create_dir_all(&lock_dir).unwrap();
-
         let lock_path = lock_dir.join("reacquire_test.lock");
         {
             let file = File::create(&lock_path).unwrap();
@@ -247,11 +243,9 @@ mod file_lock_tests {
     fn test_try_lock_nonblocking() {
         let lock_dir = get_test_lock_dir();
         fs::create_dir_all(&lock_dir).unwrap();
-
         let lock_path = lock_dir.join("trylock_test.lock");
         let file = File::create(&lock_path).unwrap();
         assert!(file.try_lock_exclusive().is_ok());
-
         file.unlock().unwrap();
         let _ = fs::remove_file(&lock_path);
     }

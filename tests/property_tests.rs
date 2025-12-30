@@ -42,7 +42,6 @@ mod property_based_tests {
             content in "[a-zA-Z0-9 ]{1,20}"
         ) {
             let path = format!("C:\\Path ({})\\bin", content);
-
             prop_assert!(path.contains('('));
             prop_assert!(path.contains(')'));
         }
@@ -63,7 +62,6 @@ mod property_based_tests {
             folder_name in "[a-zA-Z]{20,50}"
         ) {
             let long_path = "C:\\".to_string() + &format!("{}\\", folder_name).repeat(10);
-
             if long_path.len() > 260 {
                 prop_assert!(long_path.len() > 260);
             }
@@ -74,7 +72,6 @@ mod property_based_tests {
             folder_name in "[a-zA-Z]{30,60}"
         ) {
             let very_long_path = "C:\\".to_string() + &format!("{}\\", folder_name).repeat(50);
-
             if very_long_path.len() > 2047 {
                 prop_assert!(very_long_path.len() > 2047);
             }
@@ -91,7 +88,6 @@ mod property_based_tests {
             } else {
                 path.clone()
             };
-
             let quoted_twice = if quoted_once.contains(' ') && !quoted_once.starts_with('"') {
                 format!("\"{}\"", quoted_once)
             } else {
@@ -107,7 +103,6 @@ mod property_based_tests {
             let original = format!("C:\\{}", path_content);
             let quoted = format!("\"{}\"", original);
             let unquoted = quoted.trim_matches('"');
-
             prop_assert_eq!(original, unquoted);
         }
     }
@@ -118,14 +113,12 @@ mod property_based_tests {
             paths in prop::collection::vec("[a-zA-Z]{3,10}", 2..20)
         ) {
             use std::collections::HashSet;
-
             let original_count = paths.len();
             let mut seen = HashSet::new();
             let unique: Vec<_> = paths.iter()
                 .filter(|p| seen.insert(p.to_lowercase()))
                 .collect();
             let unique_count = unique.len();
-
             prop_assert!(unique_count <= original_count);
         }
 
@@ -134,7 +127,6 @@ mod property_based_tests {
             paths in prop::collection::vec("[a-zA-Z]{3,10}", 2..10)
         ) {
             use std::collections::HashSet;
-
             let mut seen = HashSet::new();
             let unique: Vec<_> = paths.iter()
                 .filter(|p| seen.insert(p.to_lowercase()))
@@ -154,7 +146,6 @@ mod property_based_tests {
         ) {
             let path1 = format!("C:\\{}", path_part.to_lowercase());
             let path2 = format!("C:\\{}", path_part.to_uppercase());
-
             prop_assert_eq!(path1.to_lowercase(), path2.to_lowercase());
         }
 
@@ -163,13 +154,11 @@ mod property_based_tests {
             path_part in "[a-zA-Z]{5,20}"
         ) {
             use std::collections::HashSet;
-
             let paths = vec![
                 format!("C:\\{}", path_part.to_lowercase()),
                 format!("C:\\{}", path_part.to_uppercase()),
                 format!("C:\\{}", path_part),
             ];
-
             let mut seen = HashSet::new();
             let unique: Vec<_> = paths.iter()
                 .filter(|p| seen.insert(p.to_lowercase()))
@@ -185,9 +174,7 @@ mod property_based_tests {
         ) {
             let joined = paths.join(";");
             let split: Vec<&str> = joined.split(';').collect();
-
             prop_assert_eq!(paths.len(), split.len());
-
             for (original, parsed) in paths.iter().zip(split.iter()) {
                 prop_assert_eq!(original, parsed);
             }
@@ -201,7 +188,6 @@ mod property_based_tests {
             let filtered: Vec<&str> = path_with_empties.split(';')
                 .filter(|s| !s.is_empty())
                 .collect();
-
             prop_assert_eq!(filtered.len(), 1);
             prop_assert_eq!(filtered[0], "C:\\Windows");
         }
@@ -214,7 +200,6 @@ mod property_based_tests {
             after in "[a-zA-Z]{1,10}"
         ) {
             let path_with_space = format!("C:\\{} {}", before, after);
-
             prop_assert!(path_with_space.contains(' '));
         }
 
@@ -223,7 +208,6 @@ mod property_based_tests {
             space_count in 1usize..10usize
         ) {
             let path = format!("C:\\Path{}Test", " ".repeat(space_count));
-
             prop_assert!(path.contains(' '));
             prop_assert_eq!(path.matches(' ').count(), space_count);
         }
@@ -235,7 +219,6 @@ mod property_based_tests {
             var_name in "[A-Z]{3,15}"
         ) {
             let path = format!("C:\\%{{{}}}%\\bin", var_name);
-
             prop_assert!(path.contains('%'));
             let expected = format!("%{{{}}}%", var_name);
             prop_assert!(path.contains(&expected as &str));
@@ -248,7 +231,6 @@ mod property_based_tests {
         ) {
             let path = format!("%{}%\\bin", var_name);
             let expanded = path.replace(&format!("%{}%", var_name), &value);
-
             prop_assert!(!expanded.contains('%'));
             prop_assert!(expanded.contains(&value));
         }
@@ -260,7 +242,6 @@ mod property_based_tests {
             char in "[a-zA-Z]"
         ) {
             let path = format!("C:\\{}", char);
-
             prop_assert_eq!(path.len(), 4);
         }
 
@@ -269,7 +250,6 @@ mod property_based_tests {
             num in 0u32..10000u32
         ) {
             let path = format!("C:\\Path{}\\bin", num);
-
             prop_assert!(path.contains(&num.to_string()));
         }
 
@@ -282,7 +262,6 @@ mod property_based_tests {
                 + &"/".repeat(forward_count)
                 + &"\\".repeat(backward_count)
                 + "Path";
-
             if forward_count > 0 {
                 prop_assert!(path.contains('/'));
             }
@@ -301,7 +280,6 @@ mod property_based_tests {
             let filtered: Vec<&str> = path.split(';')
                 .filter(|s| !s.is_empty())
                 .collect();
-
             prop_assert_eq!(filtered.len(), 0);
         }
 
@@ -310,7 +288,6 @@ mod property_based_tests {
             ws_count in 1usize..10usize
         ) {
             let path = format!("C:\\{}Path{}Test", " ".repeat(ws_count), " ".repeat(ws_count));
-
             prop_assert!(path.contains(' '));
         }
     }

@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 use std::path::Path;
 
 #[cfg(test)]
@@ -16,28 +16,24 @@ mod fixer_business_logic_tests {
     #[test]
     fn test_fixer_preserves_already_quoted_paths() {
         let path = "\"C:\\Program Files\\Git\\cmd\"";
-
         assert!(path.starts_with('"') && path.ends_with('"'));
         let fixed = if path.starts_with('"') {
             path.to_string()
         } else {
             format!("\"{}\"", path)
         };
-
         assert_eq!(fixed, path);
     }
 
     #[test]
     fn test_fixer_skips_paths_without_spaces() {
         let path = "C:\\Windows\\System32";
-
         assert!(!path.contains(' '));
         let fixed = if path.contains(' ') && !path.starts_with('"') {
             format!("\"{}\"", path)
         } else {
             path.to_string()
         };
-
         assert_eq!(fixed, path);
     }
 
@@ -48,7 +44,6 @@ mod fixer_business_logic_tests {
             "\"C:\\Program Files\\App\"",
             "C:\\Windows",
         ];
-
         let fixed: Vec<String> = paths
             .iter()
             .map(|p| {
@@ -59,7 +54,6 @@ mod fixer_business_logic_tests {
                 }
             })
             .collect();
-
         assert_eq!(fixed[0], "\"C:\\Program Files\\Git\"");
         assert_eq!(fixed[1], "\"C:\\Program Files\\App\"");
         assert_eq!(fixed[2], "C:\\Windows");
@@ -67,19 +61,13 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_exact_duplicates() {
-        let paths = vec![
-            "C:\\Windows",
-            "C:\\System32",
-            "C:\\Windows",
-        ];
-
+        let paths = vec!["C:\\Windows", "C:\\System32", "C:\\Windows"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
             .filter(|p| seen.insert(p.to_string()))
             .copied()
             .collect();
-
         assert_eq!(unique.len(), 2);
         assert_eq!(unique[0], "C:\\Windows");
         assert_eq!(unique[1], "C:\\System32");
@@ -87,29 +75,19 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_case_insensitive_duplicates() {
-        let paths = vec![
-            "C:\\Windows",
-            "c:\\windows",
-            "C:\\WINDOWS",
-        ];
-
+        let paths = vec!["C:\\Windows", "c:\\windows", "C:\\WINDOWS"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
             .filter(|p| seen.insert(p.to_lowercase()))
             .copied()
             .collect();
-
         assert_eq!(unique.len(), 1);
     }
 
     #[test]
     fn test_fixer_removes_quoted_unquoted_duplicates() {
-        let paths = vec![
-            "C:\\Program Files\\Git",
-            "\"C:\\Program Files\\Git\"",
-        ];
-
+        let paths = vec!["C:\\Program Files\\Git", "\"C:\\Program Files\\Git\""];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -119,38 +97,25 @@ mod fixer_business_logic_tests {
             })
             .copied()
             .collect();
-
         assert_eq!(unique.len(), 1);
     }
 
     #[test]
     fn test_fixer_preserves_first_occurrence_of_duplicate() {
-        let paths = vec![
-            "C:\\First",
-            "C:\\Windows",
-            "C:\\Windows",
-            "C:\\Last",
-        ];
-
+        let paths = vec!["C:\\First", "C:\\Windows", "C:\\Windows", "C:\\Last"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
             .filter(|p| seen.insert(p.to_lowercase()))
             .copied()
             .collect();
-
         assert_eq!(unique.len(), 3);
         assert_eq!(unique[1], "C:\\Windows");
     }
 
     #[test]
     fn test_fixer_removes_non_existent_paths() {
-        let paths = vec![
-            "C:\\Windows",
-            "C:\\NonExistent123456789",
-            "C:\\System32",
-        ];
-
+        let paths = vec!["C:\\Windows", "C:\\NonExistent123456789", "C:\\System32"];
         let existing: Vec<&str> = paths
             .iter()
             .filter(|p| Path::new(p).exists())
@@ -171,7 +136,6 @@ mod fixer_business_logic_tests {
     #[test]
     fn test_fixer_handles_quoted_paths_existence_check() {
         let path = "\"C:\\Windows\"";
-
         let unquoted = path.trim_matches('"');
         assert!(Path::new(unquoted).exists());
     }
@@ -180,7 +144,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_preserves_path_order() {
         let paths = vec!["C:\\First", "C:\\Second", "C:\\Third"];
         let processed: Vec<&str> = paths.iter().copied().collect();
-
         assert_eq!(processed[0], "C:\\First");
         assert_eq!(processed[1], "C:\\Second");
         assert_eq!(processed[2], "C:\\Third");
@@ -188,20 +151,13 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_maintains_order_after_duplicate_removal() {
-        let paths = vec![
-            "C:\\First",
-            "C:\\Second",
-            "C:\\First",
-            "C:\\Third",
-        ];
-
+        let paths = vec!["C:\\First", "C:\\Second", "C:\\First", "C:\\Third"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
             .filter(|p| seen.insert(p.to_lowercase()))
             .copied()
             .collect();
-
         assert_eq!(unique[0], "C:\\First");
         assert_eq!(unique[1], "C:\\Second");
         assert_eq!(unique[2], "C:\\Third");
@@ -216,7 +172,6 @@ mod fixer_business_logic_tests {
         } else {
             "modified".to_string()
         };
-
         assert_eq!(modified, original_path);
     }
 
@@ -227,7 +182,6 @@ mod fixer_business_logic_tests {
             "Would remove duplicate: C:\\Windows",
             "Would remove non-existent: C:\\NonExistent",
         ];
-
         assert_eq!(changes.len(), 3);
         assert!(changes[0].starts_with("Would add quotes"));
     }
@@ -236,7 +190,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_creates_backup_before_changes() {
         let should_create_backup = true;
         let changes_detected = true;
-
         assert!(should_create_backup && changes_detected);
     }
 
@@ -244,7 +197,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_backup_contains_timestamp() {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         let backup_name = format!("path_backup_{}.json", timestamp);
-
         assert!(backup_name.starts_with("path_backup_"));
         assert!(backup_name.ends_with(".json"));
         assert!(backup_name.contains('_'));
@@ -257,7 +209,6 @@ mod fixer_business_logic_tests {
             "user_path": "C:\\Users\\test\\bin",
             "system_path": "C:\\Windows;C:\\System32"
         });
-
         assert!(backup_data["user_path"].is_string());
         assert!(backup_data["system_path"].is_string());
         assert!(backup_data["timestamp"].is_string());
@@ -270,14 +221,12 @@ mod fixer_business_logic_tests {
             "Removed duplicate: C:\\Windows",
             "Removed non-existent: C:\\NonExistent",
         ];
-
         assert_eq!(changes.len(), 3);
     }
 
     #[test]
     fn test_fixer_reports_no_changes_when_clean() {
         let changes: Vec<String> = vec![];
-
         assert!(changes.is_empty());
     }
 
@@ -285,10 +234,8 @@ mod fixer_business_logic_tests {
     fn test_fixer_detects_if_path_changed() {
         let original = "C:\\Windows;C:\\System32";
         let fixed = "C:\\Windows;C:\\System32";
-
         let changed = original != fixed;
         assert!(!changed);
-
         let fixed2 = "\"C:\\Program Files\";C:\\Windows";
         let changed2 = original != fixed2;
         assert!(changed2);
@@ -298,7 +245,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_handles_empty_path() {
         let empty_path = "";
         let paths: Vec<&str> = empty_path.split(';').filter(|s| !s.is_empty()).collect();
-
         assert_eq!(paths.len(), 0);
     }
 
@@ -306,7 +252,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_handles_single_path() {
         let single_path = "C:\\Windows";
         let paths: Vec<&str> = single_path.split(';').collect();
-
         assert_eq!(paths.len(), 1);
     }
 
@@ -314,7 +259,6 @@ mod fixer_business_logic_tests {
     fn test_fixer_handles_path_with_trailing_semicolon() {
         let path = "C:\\Windows;C:\\System32;";
         let paths: Vec<&str> = path.split(';').filter(|s| !s.is_empty()).collect();
-
         assert_eq!(paths.len(), 2);
     }
 
@@ -333,7 +277,6 @@ mod fixer_business_logic_tests {
             "C:\\Path [test]\\App",
             "C:\\Path & App",
         ];
-
         for path in special_paths {
             assert!(!path.is_empty());
         }

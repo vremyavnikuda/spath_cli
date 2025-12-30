@@ -9,7 +9,6 @@ mod integration_workflow_tests {
     #[test]
     fn test_workflow_scan_detects_issues() {
         let test_path = format!("{}\\Git;{};{}", PROGRAM_FILES, WINDOWS_PATH, WINDOWS_PATH);
-
         let paths: Vec<&str> = test_path.split(';').collect();
         let unquoted_with_spaces = paths
             .iter()
@@ -38,7 +37,6 @@ mod integration_workflow_tests {
                 }
             })
             .collect();
-
         let expected = format!("\"{}\\Git\"", PROGRAM_FILES);
         assert_eq!(fixed[0], expected);
         let mut seen = HashSet::new();
@@ -46,7 +44,6 @@ mod integration_workflow_tests {
             .into_iter()
             .filter(|p| seen.insert(p.to_lowercase()))
             .collect();
-
         assert_eq!(unique.len(), 2);
     }
 
@@ -96,7 +93,6 @@ mod integration_workflow_tests {
             .collect();
         let fixed_path = fixed.join(";");
         let verified_paths: Vec<&str> = fixed_path.split(';').collect();
-
         let remaining_issues = verified_paths
             .iter()
             .filter(|p| {
@@ -104,7 +100,6 @@ mod integration_workflow_tests {
                 (trimmed.contains(' ') && !p.starts_with('"')) || !Path::new(trimmed).exists()
             })
             .count();
-
         assert_eq!(remaining_issues, 0, "All issues should be fixed");
     }
 
@@ -119,7 +114,6 @@ mod integration_workflow_tests {
     fn test_workflow_modify_changes_path() {
         let original = format!("{}\\Git;{}", PROGRAM_FILES, WINDOWS_PATH);
         let modified = format!("\"{}\\Git\";{}", PROGRAM_FILES, WINDOWS_PATH);
-
         assert_ne!(original, modified);
     }
 
@@ -148,7 +142,6 @@ mod integration_workflow_tests {
             })
             .collect();
         let modified_path = modified.join(";");
-
         assert_ne!(original, modified_path);
         let restored = backup;
         assert_eq!(restored, original);
@@ -175,7 +168,6 @@ mod integration_workflow_tests {
             .filter(|p| seen.insert(p.to_lowercase()))
             .copied()
             .collect();
-
         assert_eq!(cleaned.len(), 2);
         assert_eq!(cleaned[0], WINDOWS_PATH);
         assert_eq!(cleaned[1], "C:\\System32");
@@ -185,14 +177,12 @@ mod integration_workflow_tests {
     fn test_workflow_clean_preserves_order() {
         let original = "C:\\First;C:\\Second;C:\\First;C:\\Third;C:\\Second";
         let paths: Vec<&str> = original.split(';').collect();
-
         let mut seen = HashSet::new();
         let cleaned: Vec<&str> = paths
             .iter()
             .filter(|p| seen.insert(p.to_lowercase()))
             .copied()
             .collect();
-
         assert_eq!(cleaned[0], "C:\\First");
         assert_eq!(cleaned[1], "C:\\Second");
         assert_eq!(cleaned[2], "C:\\Third");
@@ -201,7 +191,6 @@ mod integration_workflow_tests {
     #[test]
     fn test_workflow_analyze_detects_misplaced_paths() {
         let system_paths = vec![WINDOWS_PATH, "C:\\Users\\test\\.cargo\\bin"];
-
         let misplaced = system_paths
             .iter()
             .filter(|p| {
@@ -209,7 +198,6 @@ mod integration_workflow_tests {
                 lower.contains("\\users\\") || lower.contains(".cargo")
             })
             .count();
-
         assert_eq!(misplaced, 1);
     }
 
@@ -226,7 +214,6 @@ mod integration_workflow_tests {
             .map(|s| s.to_string())
             .collect();
         user_paths.extend(to_migrate);
-
         assert_eq!(user_paths.len(), 2);
         assert!(user_paths.contains(&"C:\\Users\\test\\.cargo\\bin".to_string()));
     }
@@ -245,7 +232,6 @@ mod integration_workflow_tests {
         } else {
             "modified".to_string()
         };
-
         assert_eq!(result, original);
         assert_eq!(changes.len(), 2);
     }
@@ -257,7 +243,6 @@ mod integration_workflow_tests {
             PROGRAM_FILES, WINDOWS_PATH, WINDOWS_PATH
         );
         let paths: Vec<&str> = original.split(';').collect();
-
         let mut changes = Vec::new();
         for path in &paths {
             if path.contains(' ') && !path.starts_with('"') {
@@ -273,7 +258,6 @@ mod integration_workflow_tests {
                 changes.push(format!("Would remove duplicate: {}", path));
             }
         }
-
         assert!(changes.len() >= 3);
     }
 
@@ -281,7 +265,6 @@ mod integration_workflow_tests {
     fn test_workflow_handles_empty_path() {
         let empty_path = "";
         let paths: Vec<&str> = empty_path.split(';').filter(|s| !s.is_empty()).collect();
-
         assert_eq!(paths.len(), 0);
         let fixed: Vec<String> = paths.iter().map(|p| p.to_string()).collect();
         assert_eq!(fixed.len(), 0);
@@ -291,7 +274,6 @@ mod integration_workflow_tests {
     fn test_workflow_handles_corrupted_path() {
         let corrupted = format!(";;;{};;;C:\\System32;;;", WINDOWS_PATH);
         let paths: Vec<&str> = corrupted.split(';').filter(|s| !s.is_empty()).collect();
-
         assert_eq!(paths.len(), 2);
         assert_eq!(paths[0], WINDOWS_PATH);
         assert_eq!(paths[1], "C:\\System32");
@@ -301,7 +283,6 @@ mod integration_workflow_tests {
     fn test_workflow_handles_all_non_existent_paths() {
         let all_non_existent = "C:\\NonExistent1;C:\\NonExistent2;C:\\NonExistent3";
         let paths: Vec<&str> = all_non_existent.split(';').collect();
-
         let existing: Vec<&str> = paths
             .iter()
             .filter(|p| Path::new(p).exists())
@@ -317,7 +298,6 @@ mod integration_workflow_tests {
             "{}\\Git;{}\\git;{};C:\\NonExistent;\"{}\\App\";{}",
             PROGRAM_FILES, pf_lower, WINDOWS_PATH, PROGRAM_FILES, WINDOWS_PATH
         );
-
         let paths: Vec<&str> = complex_path.split(';').collect();
         let mut seen = HashSet::new();
         let fixed: Vec<String> = paths
