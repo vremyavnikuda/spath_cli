@@ -190,7 +190,7 @@ mod integration_workflow_tests {
 
     #[test]
     fn test_workflow_analyze_detects_misplaced_paths() {
-        let system_paths = vec![WINDOWS_PATH, "C:\\Users\\test\\.cargo\\bin"];
+        let system_paths = [WINDOWS_PATH, "C:\\Users\\test\\.cargo\\bin"];
         let misplaced = system_paths
             .iter()
             .filter(|p| {
@@ -203,7 +203,7 @@ mod integration_workflow_tests {
 
     #[test]
     fn test_workflow_migrate_moves_paths() {
-        let system_paths = vec![WINDOWS_PATH, "C:\\Users\\test\\.cargo\\bin"];
+        let system_paths = [WINDOWS_PATH, "C:\\Users\\test\\.cargo\\bin"];
         let mut user_paths: Vec<String> = vec!["C:\\Users\\test\\bin".to_string()];
         let to_migrate: Vec<String> = system_paths
             .iter()
@@ -223,7 +223,7 @@ mod integration_workflow_tests {
         let original = format!("{}\\Git;{};{}", PROGRAM_FILES, WINDOWS_PATH, WINDOWS_PATH);
         let dry_run = true;
         let _paths: Vec<&str> = original.split(';').collect();
-        let changes = vec![
+        let changes = [
             format!("Would add quotes: {}\\Git", PROGRAM_FILES),
             format!("Would remove duplicate: {}", WINDOWS_PATH),
         ];

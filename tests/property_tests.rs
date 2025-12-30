@@ -154,7 +154,7 @@ mod property_based_tests {
             path_part in "[a-zA-Z]{5,20}"
         ) {
             use std::collections::HashSet;
-            let paths = vec![
+            let paths = [
                 format!("C:\\{}", path_part.to_lowercase()),
                 format!("C:\\{}", path_part.to_uppercase()),
                 format!("C:\\{}", path_part),

@@ -104,7 +104,7 @@ mod visualizer_tests {
         let paths = vec![spath_cli::constants::WINDOWS_PATH.to_string()];
         let entry = PathEntry::new(0, spath_cli::constants::WINDOWS_PATH.to_string(), &paths);
         let warnings = entry.get_warnings();
-        assert!(warnings.is_empty() || warnings.len() == 0);
+        assert!(warnings.is_empty());
     }
 
     #[test]

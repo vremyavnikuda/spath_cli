@@ -163,8 +163,8 @@ mod analyzer_business_logic_tests {
 
     #[test]
     fn test_analyzer_processes_both_system_and_user_paths() {
-        let system_paths = vec!["C:\\Windows", "C:\\Program Files\\Git"];
-        let user_paths = vec!["C:\\Users\\test\\.cargo\\bin"];
+        let system_paths = ["C:\\Windows", "C:\\Program Files\\Git"];
+        let user_paths = ["C:\\Users\\test\\.cargo\\bin"];
         let total_paths = system_paths.len() + user_paths.len();
         assert_eq!(total_paths, 3);
     }
@@ -183,7 +183,7 @@ mod analyzer_business_logic_tests {
 
     #[test]
     fn test_analyzer_counts_misplaced_paths() {
-        let paths = vec![
+        let paths = [
             ("C:\\Users\\test\\.cargo\\bin", "system", true),
             ("C:\\Windows", "system", false),
             ("C:\\Program Files\\Git", "user", true),
@@ -197,7 +197,7 @@ mod analyzer_business_logic_tests {
 
     #[test]
     fn test_analyzer_counts_paths_needing_quotes() {
-        let paths = vec![
+        let paths = [
             ("C:\\Program Files\\Git", false),
             ("\"C:\\Program Files\\App\"", true),
             ("C:\\Windows", false),
@@ -211,7 +211,7 @@ mod analyzer_business_logic_tests {
 
     #[test]
     fn test_analyzer_counts_non_existent_paths() {
-        let paths = vec![
+        let paths = [
             "C:\\Windows",
             "C:\\NonExistent123",
             "C:\\AnotherNonExistent456",
@@ -266,13 +266,13 @@ mod analyzer_business_logic_tests {
     #[test]
     fn test_analyzer_handles_unicode_in_username() {
         let path = "C:\\Users\\Пользователь\\.cargo\\bin";
-        assert!(path.chars().any(|c| !c.is_ascii()));
+        assert!(!path.is_ascii());
         assert!(path.contains("\\Users\\"));
     }
 
     #[test]
     fn test_analyzer_handles_mixed_case_paths() {
-        let paths = vec![
+        let paths = [
             "C:\\Program Files\\Git",
             "c:\\program files\\git",
             "C:\\PROGRAM FILES\\GIT",
@@ -320,7 +320,7 @@ mod analyzer_business_logic_tests {
 
     #[test]
     fn test_analyzer_formats_recommendations() {
-        let recommendations = vec![
+        let recommendations = [
             "Move C:\\Users\\test\\.cargo\\bin to USER PATH",
             "Add quotes to C:\\Program Files\\Git",
             "Remove C:\\NonExistent (does not exist)",

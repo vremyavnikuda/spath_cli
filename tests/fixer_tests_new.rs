@@ -39,7 +39,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_handles_multiple_paths_with_mixed_quoting() {
-        let paths = vec![
+        let paths = [
             "C:\\Program Files\\Git",
             "\"C:\\Program Files\\App\"",
             "C:\\Windows",
@@ -61,7 +61,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_exact_duplicates() {
-        let paths = vec!["C:\\Windows", "C:\\System32", "C:\\Windows"];
+        let paths = ["C:\\Windows", "C:\\System32", "C:\\Windows"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -75,7 +75,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_case_insensitive_duplicates() {
-        let paths = vec!["C:\\Windows", "c:\\windows", "C:\\WINDOWS"];
+        let paths = ["C:\\Windows", "c:\\windows", "C:\\WINDOWS"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -87,7 +87,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_quoted_unquoted_duplicates() {
-        let paths = vec!["C:\\Program Files\\Git", "\"C:\\Program Files\\Git\""];
+        let paths = ["C:\\Program Files\\Git", "\"C:\\Program Files\\Git\""];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -102,7 +102,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_preserves_first_occurrence_of_duplicate() {
-        let paths = vec!["C:\\First", "C:\\Windows", "C:\\Windows", "C:\\Last"];
+        let paths = ["C:\\First", "C:\\Windows", "C:\\Windows", "C:\\Last"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -115,7 +115,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_removes_non_existent_paths() {
-        let paths = vec!["C:\\Windows", "C:\\NonExistent123456789", "C:\\System32"];
+        let paths = ["C:\\Windows", "C:\\NonExistent123456789", "C:\\System32"];
         let existing: Vec<&str> = paths
             .iter()
             .filter(|p| Path::new(p).exists())
@@ -142,8 +142,8 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_preserves_path_order() {
-        let paths = vec!["C:\\First", "C:\\Second", "C:\\Third"];
-        let processed: Vec<&str> = paths.iter().copied().collect();
+        let paths = ["C:\\First", "C:\\Second", "C:\\Third"];
+        let processed: Vec<&str> = paths.to_vec();
         assert_eq!(processed[0], "C:\\First");
         assert_eq!(processed[1], "C:\\Second");
         assert_eq!(processed[2], "C:\\Third");
@@ -151,7 +151,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_maintains_order_after_duplicate_removal() {
-        let paths = vec!["C:\\First", "C:\\Second", "C:\\First", "C:\\Third"];
+        let paths = ["C:\\First", "C:\\Second", "C:\\First", "C:\\Third"];
         let mut seen = HashSet::new();
         let unique: Vec<&str> = paths
             .iter()
@@ -177,7 +177,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_dry_run_reports_changes() {
-        let changes = vec![
+        let changes = [
             "Would add quotes: C:\\Program Files\\Git",
             "Would remove duplicate: C:\\Windows",
             "Would remove non-existent: C:\\NonExistent",
@@ -216,7 +216,7 @@ mod fixer_business_logic_tests {
 
     #[test]
     fn test_fixer_reports_all_changes() {
-        let changes = vec![
+        let changes = [
             "Added quotes: C:\\Program Files\\Git",
             "Removed duplicate: C:\\Windows",
             "Removed non-existent: C:\\NonExistent",
@@ -265,7 +265,7 @@ mod fixer_business_logic_tests {
     #[test]
     fn test_fixer_handles_unicode_paths() {
         let unicode_path = "C:\\Пользователи\\用户";
-        assert!(unicode_path.chars().any(|c| !c.is_ascii()));
+        assert!(!unicode_path.is_ascii());
         let processed = unicode_path.to_string();
         assert_eq!(processed, unicode_path);
     }

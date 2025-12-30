@@ -131,7 +131,7 @@ mod scanner_business_logic_tests {
     fn test_scanner_counts_unquoted_with_spaces() {
         let git_path = format!("{}\\Git", PROGRAM_FILES);
         let app_path = format!("\"{}\\App\"", PROGRAM_FILES);
-        let paths = vec![&git_path, &app_path, WINDOWS_PATH];
+        let paths = [&git_path, &app_path, WINDOWS_PATH];
         let unquoted_with_spaces = paths
             .iter()
             .filter(|p| p.contains(' ') && !p.starts_with('"'))
@@ -143,7 +143,7 @@ mod scanner_business_logic_tests {
     fn test_scanner_counts_properly_quoted() {
         let git_path = format!("\"{}\\Git\"", PROGRAM_FILES);
         let app_path = format!("\"{}\\App\"", PROGRAM_FILES);
-        let paths = vec![&git_path, &app_path, WINDOWS_PATH];
+        let paths = [&git_path, &app_path, WINDOWS_PATH];
         let properly_quoted = paths
             .iter()
             .filter(|p| p.starts_with('"') && p.ends_with('"') && p.contains(' '))
@@ -158,9 +158,7 @@ mod scanner_business_logic_tests {
         let is_quoted = path.starts_with('"');
         let is_exploitable = path.to_lowercase().starts_with("c:\\program files");
         let exists = std::path::Path::new(path).exists();
-        if exists && has_spaces && !is_quoted && is_exploitable {
-            assert!(true);
-        }
+        assert!(exists && has_spaces && !is_quoted && is_exploitable);
     }
 
     #[test]
@@ -172,12 +170,10 @@ mod scanner_business_logic_tests {
 
     #[test]
     fn test_scanner_assigns_info_level_to_safe_unquoted() {
-        let path = "C:\\CustomApp\\bin";
+        let path = "C:\\Custom App\\bin";
         let has_spaces = path.contains(' ');
         let is_program_files = path.to_lowercase().starts_with("c:\\program files");
-        if has_spaces && !is_program_files {
-            assert!(true);
-        }
+        assert!(has_spaces && !is_program_files);
     }
 
     #[test]
@@ -204,7 +200,7 @@ mod scanner_business_logic_tests {
     #[test]
     fn test_scanner_handles_unicode_paths() {
         let unicode_path = "C:\\Пользователи\\用户\\ユーザー";
-        assert!(unicode_path.chars().any(|c| !c.is_ascii()));
+        assert!(!unicode_path.is_ascii());
     }
 
     #[test]
