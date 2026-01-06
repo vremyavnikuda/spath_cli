@@ -31,3 +31,15 @@ pub const USER_ENV_KEY: &str = "Environment";
 /// Lock file names for preventing race conditions
 pub const USER_PATH_LOCK: &str = "user_path.lock";
 pub const SYSTEM_PATH_LOCK: &str = "system_path.lock";
+
+/// Backup file prefix
+pub const BACKUP_FILE_PREFIX: &str = "path_backup_";
+
+/// Backup file extension
+pub const BACKUP_FILE_EXTENSION: &str = "json";
+
+/// Backup timestamp format
+pub const BACKUP_TIMESTAMP_FORMAT: &str = "%Y%m%d_%H%M%S";
+
+/// Maximum single path length (Windows MAX_PATH limitation)
+pub const MAX_SINGLE_PATH_LENGTH: usize = 260;

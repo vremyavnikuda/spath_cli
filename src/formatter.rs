@@ -1,14 +1,12 @@
 //! Console output formatting for spath results.
-//!
-//! This module separates presentation logic from data models,
-//! providing formatted console output for scan, analysis, fix, and migration results.
-
-use colored::*;
-
-use crate::analyzer::{AnalysisResults, PathCategory, PathEntry, PathLocation};
+use crate::analyzer::AnalysisResults;
+use crate::backup::{BackupResult, RestoreResult};
 use crate::fixer::FixResults;
-use crate::migrator::{ActionType, MigrationPlan};
-use crate::scanner::{IssueLevel, ScanResults};
+use crate::migrator::{ActionType, MigrationPlan, MigrationResult};
+use crate::models::{IssueLevel, PathCategory, PathEntry, PathLocation};
+use crate::scanner::ScanResults;
+use crate::security::exploits::{ExploitCheckResult, VerificationSummary};
+use colored::*;
 
 /// Formatter for console output.
 pub struct ConsoleFormatter;
@@ -131,7 +129,7 @@ impl ConsoleFormatter {
     pub fn print_analysis_results(results: &AnalysisResults) {
         println!("{}", "System PATH Analysis".bold().cyan());
         println!();
-        let misplaced: Vec<_> = results
+        let misplaced: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| e.should_be_in_user_path())
@@ -157,7 +155,7 @@ impl ConsoleFormatter {
             }
             println!();
         }
-        let unquoted_system: Vec<_> = results
+        let unquoted_system: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| {
@@ -174,7 +172,7 @@ impl ConsoleFormatter {
             }
             println!();
         }
-        let unquoted_user: Vec<_> = results
+        let unquoted_user: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| matches!(e.location, PathLocation::User) && e.needs_quotes())
@@ -188,7 +186,7 @@ impl ConsoleFormatter {
             println!();
         }
         let mut seen = std::collections::HashSet::new();
-        let mut duplicates = Vec::new();
+        let mut duplicates: Vec<&PathEntry> = Vec::new();
         for entry in &results.entries {
             let normalized = entry.path.trim_matches('"').to_lowercase();
             if !seen.insert(normalized.clone()) {
@@ -298,7 +296,121 @@ impl ConsoleFormatter {
             );
             println!("Run without --dry-run to apply these changes.");
         } else if results.changed {
-            println!("{}", "Changes applied successfully.".green().bold());
+            if let Some(ref backup) = results.backup_created {
+                Self::print_backup_result(backup);
+            }
+            println!();
+            println!("{}", "PATH has been fixed.".green().bold());
+            println!(
+                "{}",
+                "  Note: You may need to restart applications for changes to take effect.".yellow()
+            );
+        }
+    }
+    pub fn print_backup_result(result: &BackupResult) {
+        println!(
+            "{} {}",
+            "Backup created:".green().bold(),
+            result.path.display()
+        );
+        for cleaned in &result.cleaned_backups {
+            println!("{} Removed old backup: {}", "✓".green(), cleaned.display());
+        }
+    }
+    pub fn print_restore_result(result: &RestoreResult) {
+        println!(
+            "{} {}",
+            "PATH restored from backup:".green().bold(),
+            result.path().display()
+        );
+        println!(
+            "{}",
+            "  Note: You may need to restart applications for changes to take effect.".yellow()
+        );
+    }
+    pub fn print_migration_result(result: &MigrationResult) {
+        println!(
+            "{} {}",
+            "Backup created:".green().bold(),
+            result.backup_path.display()
+        );
+        if result.user_path_updated {
+            println!("{}", "USER PATH updated successfully".green().bold());
+        }
+        if let Some(ref error) = result.system_path_error {
+            println!(
+                "{}",
+                "✗ Failed to update SYSTEM PATH (requires admin rights)"
+                    .red()
+                    .bold()
+            );
+            println!("  Error: {}", error);
+            println!();
+            println!("{}", "  USER PATH was updated successfully.".green());
+            println!(
+                "{}",
+                "  Run as administrator to update SYSTEM PATH.".yellow()
+            );
+        } else if result.system_path_updated {
+            println!("{}", "SYSTEM PATH updated successfully".green().bold());
+        }
+    }
+    pub fn print_migration_requires_admin() {
+        println!(
+            "{}",
+            "This migration requires administrator rights!"
+                .yellow()
+                .bold()
+        );
+        println!(
+            "{}",
+            "  Some changes will be skipped if not running as admin.".yellow()
+        );
+        println!();
+    }
+    pub fn print_verification_results(
+        results: &[ExploitCheckResult],
+        summary: &VerificationSummary,
+    ) {
+        for result in results {
+            if result.is_exploitable {
+                println!("{} {}", "✗".red().bold(), result.path);
+                println!(
+                    "  {} Potential exploit files found:",
+                    "DANGER:".red().bold()
+                );
+                for exploit in &result.found_exploits {
+                    println!("    - {}", exploit.red());
+                }
+            } else {
+                println!("{} {}", "✓".green(), result.path);
+                println!("  No exploit files found - safe for now");
+            }
+            println!();
+        }
+        println!();
+        println!("{}", "Verification Summary:".bold());
+        println!("  Total critical issues: {}", summary.total_checked);
+        println!(
+            "  {} Real threats (exploit files exist): {}",
+            "✗".red(),
+            summary.real_threats
+        );
+        println!(
+            "  {} Potential risks (no exploits yet): {}",
+            "✓".green(),
+            summary.potential_risks
+        );
+        if summary.real_threats > 0 {
+            println!();
+            println!("{}", "⚠ IMMEDIATE ACTION REQUIRED!".red().bold());
+            println!("  Malicious files detected that could exploit your PATH.");
+            println!("  Remove these files or fix your PATH immediately.");
+        } else {
+            println!();
+            println!("{}", "Current Status: SAFE".green().bold());
+            println!("  No active exploits detected, but paths are vulnerable.");
+            println!("  Consider fixing these issues to prevent future attacks.");
         }
     }
 

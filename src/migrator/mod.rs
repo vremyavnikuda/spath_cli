@@ -1,19 +1,18 @@
-use anyhow::{Context, Result};
-use colored::*;
-use std::collections::{HashMap, HashSet};
-use std::env;
-
-use crate::analyzer::{PathCategory, PathEntry, PathLocation, SystemAnalyzer};
-use crate::constants::BACKUP_DIR_NAME;
+//! PATH migration for optimizing PATH structure.
+use crate::analyzer::AnalysisResults;
+use crate::backup::BackupManager;
+use crate::models::{PathCategory, PathEntry, PathLocation};
 use crate::registry::RegistryHelper;
+use crate::utils::quote_if_needed;
+use anyhow::Result;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct MigrationAction {
     pub action_type: ActionType,
     pub path: String,
     pub from_location: PathLocation,
-    #[allow(dead_code)]
-    pub to_location: Option<PathLocation>,
     pub reason: String,
 }
 
@@ -24,28 +23,35 @@ pub enum ActionType {
     AddQuotes,
 }
 
+#[derive(Debug)]
+pub struct MigrationResult {
+    pub backup_path: PathBuf,
+    pub user_path_updated: bool,
+    pub system_path_updated: bool,
+    pub system_path_error: Option<String>,
+}
+
+pub struct MigrationPlan {
+    pub actions: Vec<MigrationAction>,
+    pub requires_admin: bool,
+}
+
 pub struct PathMigrator {
-    backup_dir: std::path::PathBuf,
+    backup_manager: BackupManager,
 }
 
 impl PathMigrator {
     pub fn new() -> Result<Self> {
-        let local_app_data =
-            env::var("LOCALAPPDATA").context("Failed to get LOCALAPPDATA environment variable")?;
-        let backup_dir = std::path::PathBuf::from(local_app_data)
-            .join("spath")
-            .join(BACKUP_DIR_NAME);
-        std::fs::create_dir_all(&backup_dir).context("Failed to create backup directory")?;
-        Ok(Self { backup_dir })
+        Ok(Self {
+            backup_manager: BackupManager::new()?,
+        })
     }
-
     pub fn plan_migration(
         &self,
+        analysis: &AnalysisResults,
         remove_duplicates: bool,
         move_user_paths: bool,
     ) -> Result<MigrationPlan> {
-        let analyzer = SystemAnalyzer::new()?;
-        let analysis = analyzer.analyze()?;
         let mut actions = Vec::new();
         if remove_duplicates {
             actions.extend(self.plan_duplicate_removal(&analysis.entries)?);
@@ -59,7 +65,6 @@ impl PathMigrator {
             requires_admin,
         })
     }
-
     fn plan_duplicate_removal(&self, entries: &[PathEntry]) -> Result<Vec<MigrationAction>> {
         let mut actions = Vec::new();
         let mut path_locations: HashMap<String, Vec<&PathEntry>> = HashMap::new();
@@ -98,8 +103,7 @@ impl PathMigrator {
                     actions.push(MigrationAction {
                         action_type: ActionType::RemoveDuplicate,
                         path: entry.path.clone(),
-                        from_location: entry.location.clone(),
-                        to_location: None,
+                        from_location: entry.location,
                         reason: format!("Duplicate - already exists in {}", keep_location),
                     });
                 }
@@ -107,7 +111,6 @@ impl PathMigrator {
         }
         Ok(actions)
     }
-
     fn plan_user_path_migration(&self, entries: &[PathEntry]) -> Result<Vec<MigrationAction>> {
         let mut actions = Vec::new();
         for entry in entries {
@@ -118,46 +121,49 @@ impl PathMigrator {
                     action_type: ActionType::MoveToUser,
                     path: entry.path.clone(),
                     from_location: PathLocation::System,
-                    to_location: Some(PathLocation::User),
                     reason: "User-specific path should be in USER PATH".to_string(),
                 });
             } else if entry.path.contains(' ') && !entry.path.starts_with('"') {
                 actions.push(MigrationAction {
                     action_type: ActionType::AddQuotes,
                     path: entry.path.clone(),
-                    from_location: entry.location.clone(),
-                    to_location: Some(entry.location.clone()),
+                    from_location: entry.location,
                     reason: "Path contains spaces and should be quoted".to_string(),
                 });
             }
         }
         Ok(actions)
     }
-
     fn has_system_changes(&self, actions: &[MigrationAction]) -> bool {
         actions
             .iter()
             .any(|a| matches!(a.from_location, PathLocation::System))
     }
-
-    pub fn execute_migration(&self, plan: &MigrationPlan, dry_run: bool) -> Result<()> {
+    pub fn execute_migration(
+        &self,
+        plan: &MigrationPlan,
+        dry_run: bool,
+    ) -> Result<MigrationResult> {
         if dry_run {
-            return Ok(());
+            return Ok(MigrationResult {
+                backup_path: PathBuf::new(),
+                user_path_updated: false,
+                system_path_updated: false,
+                system_path_error: None,
+            });
         }
-        if plan.requires_admin {
-            println!(
-                "{}",
-                "This migration requires administrator rights!"
-                    .yellow()
-                    .bold()
-            );
-            println!(
-                "{}",
-                "  Some changes will be skipped if not running as admin.".yellow()
-            );
-            println!();
-        }
-        self.create_backup()?;
+        let backup_result = self.backup_manager.create()?;
+        let (system_removals, user_removals, user_additions) = self.categorize_actions(plan);
+        let user_path_updated = self.apply_user_changes(&user_removals, &user_additions)?;
+        let (system_path_updated, system_path_error) = self.apply_system_changes(&system_removals);
+        Ok(MigrationResult {
+            backup_path: backup_result.path,
+            user_path_updated,
+            system_path_updated,
+            system_path_error,
+        })
+    }
+    fn categorize_actions(&self, plan: &MigrationPlan) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut system_removals = Vec::new();
         let mut user_removals = Vec::new();
         let mut user_additions = Vec::new();
@@ -171,12 +177,7 @@ impl PathMigrator {
                 }
                 (ActionType::MoveToUser, PathLocation::System) => {
                     system_removals.push(action.path.clone());
-                    let path_to_add = if action.path.contains(' ') && !action.path.starts_with('"')
-                    {
-                        format!("\"{}\"", action.path)
-                    } else {
-                        action.path.clone()
-                    };
+                    let path_to_add = quote_if_needed(&action.path);
                     user_additions.push(path_to_add);
                 }
                 (ActionType::AddQuotes, PathLocation::System) => {
@@ -190,57 +191,12 @@ impl PathMigrator {
                 _ => {}
             }
         }
-        if !user_removals.is_empty() || !user_additions.is_empty() {
-            self.update_user_path(&user_removals, &user_additions)?;
-        }
-        if !system_removals.is_empty() {
-            match self.update_system_path(&system_removals) {
-                Ok(_) => {
-                    println!("{}", "SYSTEM PATH updated successfully".green().bold());
-                }
-                Err(e) => {
-                    println!(
-                        "{}",
-                        "✗ Failed to update SYSTEM PATH (requires admin rights)"
-                            .red()
-                            .bold()
-                    );
-                    println!("  Error: {}", e);
-                    println!();
-                    println!("{}", "  USER PATH was updated successfully.".green());
-                    println!(
-                        "{}",
-                        "  Run as administrator to update SYSTEM PATH.".yellow()
-                    );
-                }
-            }
-        }
-        Ok(())
+        (system_removals, user_removals, user_additions)
     }
-
-    fn create_backup(&self) -> Result<()> {
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let backup_file = self
-            .backup_dir
-            .join(format!("path_backup_{}.json", timestamp));
-        let user_path = RegistryHelper::read_user_path_raw()?;
-        let system_path = RegistryHelper::read_system_path_raw().ok();
-        let backup = serde_json::json!({
-            "timestamp": timestamp,
-            "user_path": user_path,
-            "system_path": system_path,
-        });
-        std::fs::write(&backup_file, serde_json::to_string_pretty(&backup)?)?;
-        println!(
-            "{} {}",
-            "Backup created:".green().bold(),
-            backup_file.display()
-        );
-        println!();
-        Ok(())
-    }
-
-    fn update_user_path(&self, removals: &[String], additions: &[String]) -> Result<()> {
+    fn apply_user_changes(&self, removals: &[String], additions: &[String]) -> Result<bool> {
+        if removals.is_empty() && additions.is_empty() {
+            return Ok(false);
+        }
         let current_path = RegistryHelper::read_user_path_raw()?;
         let mut paths = RegistryHelper::parse_path_string(&current_path);
         let removals_normalized: HashSet<String> = removals
@@ -254,10 +210,17 @@ impl PathMigrator {
         paths.extend(additions.iter().cloned());
         let new_path = RegistryHelper::join_paths(&paths);
         RegistryHelper::write_user_path(&new_path)?;
-        println!("{}", "USER PATH updated successfully".green().bold());
-        Ok(())
+        Ok(true)
     }
-
+    fn apply_system_changes(&self, removals: &[String]) -> (bool, Option<String>) {
+        if removals.is_empty() {
+            return (false, None);
+        }
+        match self.update_system_path(removals) {
+            Ok(_) => (true, None),
+            Err(e) => (false, Some(e.to_string())),
+        }
+    }
     fn update_system_path(&self, removals: &[String]) -> Result<()> {
         let current_path = RegistryHelper::read_system_path_raw()?;
         let mut paths = RegistryHelper::parse_path_string(&current_path);
@@ -273,9 +236,4 @@ impl PathMigrator {
         RegistryHelper::write_system_path(&new_path)?;
         Ok(())
     }
-}
-
-pub struct MigrationPlan {
-    pub actions: Vec<MigrationAction>,
-    pub requires_admin: bool,
 }
