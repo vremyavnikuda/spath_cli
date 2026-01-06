@@ -1,40 +1,13 @@
+//! PATH scanner for security issues.
+use crate::constants::{PROGRAM_FILES, PROGRAM_FILES_X86, WINDOWS_PATH};
+use crate::models::{AuditStats, IssueLevel, PathIssue};
+use crate::registry::RegistryHelper;
+use crate::utils::{expand_env_vars, is_absolute_path};
 use anyhow::{Context, Result};
 use std::collections::HashSet;
-use std::env;
 use std::path::Path;
 use tracing::{debug, info, warn};
 
-use crate::constants::{PROGRAM_FILES, PROGRAM_FILES_X86, WINDOWS_PATH};
-use crate::registry::RegistryHelper;
-
-/// Expands environment variables in a path string.
-///
-/// Supports Windows-style `%VAR%` syntax.
-fn expand_env_vars(path: &str) -> String {
-    let mut result = path.to_string();
-    while let Some(start) = result.find('%') {
-        if let Some(end) = result[start + 1..].find('%') {
-            let var_name = &result[start + 1..start + 1 + end];
-            if let Ok(value) = env::var(var_name) {
-                let pattern = format!("%{}%", var_name);
-                result = result.replace(&pattern, &value);
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-    result
-}
-
-/// Checks if an unquoted path with spaces could be exploited.
-///
-/// Returns true if the path could be vulnerable to DLL hijacking or similar attacks.
-///
-/// For example, `"C:\Program Files\App\bin"` could be exploited by creating:
-/// - `C:\Program.exe` (would be executed instead of `C:\Program Files\...`)
-/// - `C:\Program Files\App.exe` (would be executed instead of `C:\Program Files\App\...`)
 fn check_path_exploitable(path: &str) -> bool {
     let path_lower = path.to_lowercase();
     path_lower.starts_with(PROGRAM_FILES)
@@ -42,33 +15,10 @@ fn check_path_exploitable(path: &str) -> bool {
         || path_lower.starts_with(WINDOWS_PATH)
 }
 
-#[derive(Debug, Clone)]
-pub enum IssueLevel {
-    Critical,
-    Warning,
-    Info,
-}
-#[derive(Debug, Clone)]
-pub struct PathIssue {
-    pub path: String,
-    pub level: IssueLevel,
-    pub message: String,
-}
-
 pub struct ScanResults {
     pub paths: Vec<String>,
     pub issues: Vec<PathIssue>,
     pub audit: AuditStats,
-}
-
-#[derive(Debug, Default)]
-pub struct AuditStats {
-    pub total_paths: usize,
-    pub unquoted_with_spaces: usize,
-    pub non_existent: usize,
-    pub relative_paths: usize,
-    pub properly_quoted: usize,
-    pub valid_paths: usize,
 }
 
 pub struct PathScanner {
@@ -86,7 +36,6 @@ impl PathScanner {
         };
         Ok(Self { path_var })
     }
-
     pub fn scan(&self) -> Result<ScanResults> {
         info!("Starting PATH scan");
         let paths = RegistryHelper::parse_path_string(&self.path_var);
@@ -98,86 +47,7 @@ impl PathScanner {
         };
         let mut seen = HashSet::new();
         for path in &paths {
-            let trimmed = path.trim();
-            let has_spaces = trimmed.contains(' ');
-            let is_quoted = trimmed.starts_with('"');
-            let path_to_check = if trimmed.contains('%') {
-                expand_env_vars(trimmed)
-            } else {
-                trimmed.trim_matches('"').to_string()
-            };
-            let exists = Path::new(&path_to_check).exists();
-            let is_absolute =
-                trimmed.contains(':') || trimmed.starts_with('"') || trimmed.contains('%');
-            if has_spaces && !is_quoted {
-                audit.unquoted_with_spaces += 1;
-            }
-            if !exists {
-                audit.non_existent += 1;
-            }
-            if !is_absolute && !trimmed.is_empty() {
-                audit.relative_paths += 1;
-            }
-            if has_spaces && is_quoted {
-                audit.properly_quoted += 1;
-            }
-            if exists && is_absolute && (!has_spaces || is_quoted) {
-                audit.valid_paths += 1;
-            }
-            if seen.contains(trimmed) {
-                issues.push(PathIssue {
-                    path: path.clone(),
-                    level: IssueLevel::Warning,
-                    message: "Duplicate path entry".to_string(),
-                });
-            }
-            seen.insert(trimmed.to_string());
-            if has_spaces && !is_quoted {
-                if exists {
-                    let is_exploitable = check_path_exploitable(trimmed);
-                    if is_exploitable {
-                        warn!("Critical security issue found: {}", trimmed);
-                        issues.push(PathIssue {
-                            path: path.clone(),
-                            level: IssueLevel::Critical,
-                            message: "Path contains spaces without quotes and could be exploited by creating malicious files/directories".to_string(),
-                        });
-                    } else {
-                        issues.push(PathIssue {
-                            path: path.clone(),
-                            level: IssueLevel::Info,
-                            message: "Path contains spaces but is not quoted. Consider adding quotes for better compatibility.".to_string(),
-                        });
-                    }
-                } else {
-                    issues.push(PathIssue {
-                        path: path.clone(),
-                        level: IssueLevel::Warning,
-                        message: "Path contains spaces, is not quoted, and does not exist"
-                            .to_string(),
-                    });
-                }
-            } else if has_spaces && is_quoted && exists {
-                issues.push(PathIssue {
-                    path: path.clone(),
-                    level: IssueLevel::Info,
-                    message: "Path is properly quoted".to_string(),
-                });
-            }
-            if !exists {
-                issues.push(PathIssue {
-                    path: path.clone(),
-                    level: IssueLevel::Warning,
-                    message: "Path does not exist".to_string(),
-                });
-            }
-            if !is_absolute && !trimmed.is_empty() {
-                issues.push(PathIssue {
-                    path: path.clone(),
-                    level: IssueLevel::Warning,
-                    message: "Relative path detected - should use absolute paths".to_string(),
-                });
-            }
+            self.scan_single_path(path, &mut issues, &mut audit, &mut seen);
         }
         info!(
             "Scan completed: {} issues found, {} critical",
@@ -192,5 +62,116 @@ impl PathScanner {
             issues,
             audit,
         })
+    }
+    fn scan_single_path(
+        &self,
+        path: &str,
+        issues: &mut Vec<PathIssue>,
+        audit: &mut AuditStats,
+        seen: &mut HashSet<String>,
+    ) {
+        let trimmed = path.trim();
+        let has_spaces = trimmed.contains(' ');
+        let is_quoted = trimmed.starts_with('"');
+        let path_to_check = self.resolve_path(trimmed);
+        let exists = Path::new(&path_to_check).exists();
+        let is_absolute = is_absolute_path(trimmed);
+        self.update_audit_stats(audit, has_spaces, is_quoted, exists, is_absolute, trimmed);
+        self.check_duplicate(path, trimmed, issues, seen);
+        self.check_unquoted_spaces(path, trimmed, has_spaces, is_quoted, exists, issues);
+        self.check_existence(path, exists, issues);
+        self.check_relative_path(path, is_absolute, trimmed, issues);
+    }
+    fn resolve_path(&self, trimmed: &str) -> String {
+        if trimmed.contains('%') {
+            expand_env_vars(trimmed)
+        } else {
+            trimmed.trim_matches('"').to_string()
+        }
+    }
+    fn update_audit_stats(
+        &self,
+        audit: &mut AuditStats,
+        has_spaces: bool,
+        is_quoted: bool,
+        exists: bool,
+        is_absolute: bool,
+        trimmed: &str,
+    ) {
+        if has_spaces && !is_quoted {
+            audit.unquoted_with_spaces += 1;
+        }
+        if !exists {
+            audit.non_existent += 1;
+        }
+        if !is_absolute && !trimmed.is_empty() {
+            audit.relative_paths += 1;
+        }
+        if has_spaces && is_quoted {
+            audit.properly_quoted += 1;
+        }
+        if exists && is_absolute && (!has_spaces || is_quoted) {
+            audit.valid_paths += 1;
+        }
+    }
+    fn check_duplicate(
+        &self,
+        path: &str,
+        trimmed: &str,
+        issues: &mut Vec<PathIssue>,
+        seen: &mut HashSet<String>,
+    ) {
+        if seen.contains(trimmed) {
+            issues.push(PathIssue::warning(path, "Duplicate path entry"));
+        }
+        seen.insert(trimmed.to_string());
+    }
+    fn check_unquoted_spaces(
+        &self,
+        path: &str,
+        trimmed: &str,
+        has_spaces: bool,
+        is_quoted: bool,
+        exists: bool,
+        issues: &mut Vec<PathIssue>,
+    ) {
+        if !has_spaces || is_quoted {
+            if has_spaces && is_quoted && exists {
+                issues.push(PathIssue::info(path, "Path is properly quoted"));
+            }
+            return;
+        }
+        if exists {
+            if check_path_exploitable(trimmed) {
+                warn!("Critical security issue found: {}", trimmed);
+                issues.push(PathIssue::critical(path, "Path contains spaces without quotes and could be exploited by creating malicious files/directories"));
+            } else {
+                issues.push(PathIssue::info(path, "Path contains spaces but is not quoted. Consider adding quotes for better compatibility."));
+            }
+        } else {
+            issues.push(PathIssue::warning(
+                path,
+                "Path contains spaces, is not quoted, and does not exist",
+            ));
+        }
+    }
+    fn check_existence(&self, path: &str, exists: bool, issues: &mut Vec<PathIssue>) {
+        if !exists {
+            issues.push(PathIssue::warning(path, "Path does not exist"));
+        }
+    }
+    fn check_relative_path(
+        &self,
+        path: &str,
+        is_absolute: bool,
+        trimmed: &str,
+        issues: &mut Vec<PathIssue>,
+    ) {
+        if !is_absolute && !trimmed.is_empty() {
+            issues.push(PathIssue::warning(
+                path,
+                "Relative path detected - should use absolute paths",
+            ));
+        }
     }
 }

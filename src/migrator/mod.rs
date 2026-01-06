@@ -1,19 +1,19 @@
+use crate::analyzer::SystemAnalyzer;
+use crate::constants::{
+    BACKUP_DIR_NAME, BACKUP_FILE_EXTENSION, BACKUP_FILE_PREFIX, BACKUP_TIMESTAMP_FORMAT,
+};
+use crate::models::{PathCategory, PathEntry, PathLocation};
+use crate::registry::RegistryHelper;
 use anyhow::{Context, Result};
 use colored::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
-
-use crate::analyzer::{PathCategory, PathEntry, PathLocation, SystemAnalyzer};
-use crate::constants::BACKUP_DIR_NAME;
-use crate::registry::RegistryHelper;
 
 #[derive(Debug, Clone)]
 pub struct MigrationAction {
     pub action_type: ActionType,
     pub path: String,
     pub from_location: PathLocation,
-    #[allow(dead_code)]
-    pub to_location: Option<PathLocation>,
     pub reason: String,
 }
 
@@ -98,8 +98,7 @@ impl PathMigrator {
                     actions.push(MigrationAction {
                         action_type: ActionType::RemoveDuplicate,
                         path: entry.path.clone(),
-                        from_location: entry.location.clone(),
-                        to_location: None,
+                        from_location: entry.location,
                         reason: format!("Duplicate - already exists in {}", keep_location),
                     });
                 }
@@ -118,15 +117,13 @@ impl PathMigrator {
                     action_type: ActionType::MoveToUser,
                     path: entry.path.clone(),
                     from_location: PathLocation::System,
-                    to_location: Some(PathLocation::User),
                     reason: "User-specific path should be in USER PATH".to_string(),
                 });
             } else if entry.path.contains(' ') && !entry.path.starts_with('"') {
                 actions.push(MigrationAction {
                     action_type: ActionType::AddQuotes,
                     path: entry.path.clone(),
-                    from_location: entry.location.clone(),
-                    to_location: Some(entry.location.clone()),
+                    from_location: entry.location,
                     reason: "Path contains spaces and should be quoted".to_string(),
                 });
             }
@@ -219,10 +216,13 @@ impl PathMigrator {
     }
 
     fn create_backup(&self) -> Result<()> {
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let backup_file = self
-            .backup_dir
-            .join(format!("path_backup_{}.json", timestamp));
+        let timestamp = chrono::Local::now()
+            .format(BACKUP_TIMESTAMP_FORMAT)
+            .to_string();
+        let backup_file = self.backup_dir.join(format!(
+            "{}{}.{}",
+            BACKUP_FILE_PREFIX, timestamp, BACKUP_FILE_EXTENSION
+        ));
         let user_path = RegistryHelper::read_user_path_raw()?;
         let system_path = RegistryHelper::read_system_path_raw().ok();
         let backup = serde_json::json!({

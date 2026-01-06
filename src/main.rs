@@ -9,15 +9,18 @@ mod constants;
 mod fixer;
 mod formatter;
 mod migrator;
+mod models;
 mod registry;
 mod scanner;
 mod security;
+mod utils;
 mod visualizer;
 
 use analyzer::SystemAnalyzer;
 use fixer::PathFixer;
 use formatter::ConsoleFormatter;
 use migrator::PathMigrator;
+use models::IssueLevel;
 use scanner::PathScanner;
 
 fn ask_confirmation(message: &str) -> bool {
@@ -275,7 +278,7 @@ fn main() -> Result<()> {
             let critical_issues: Vec<_> = results
                 .issues
                 .iter()
-                .filter(|issue| matches!(issue.level, scanner::IssueLevel::Critical))
+                .filter(|issue| matches!(issue.level, IssueLevel::Critical))
                 .collect();
             if critical_issues.is_empty() {
                 println!("{}", "✓ No critical security issues found!".green().bold());

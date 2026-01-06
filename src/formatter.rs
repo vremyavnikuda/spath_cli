@@ -1,14 +1,10 @@
 //! Console output formatting for spath results.
-//!
-//! This module separates presentation logic from data models,
-//! providing formatted console output for scan, analysis, fix, and migration results.
-
-use colored::*;
-
-use crate::analyzer::{AnalysisResults, PathCategory, PathEntry, PathLocation};
+use crate::analyzer::AnalysisResults;
 use crate::fixer::FixResults;
 use crate::migrator::{ActionType, MigrationPlan};
-use crate::scanner::{IssueLevel, ScanResults};
+use crate::models::{IssueLevel, PathCategory, PathEntry, PathLocation};
+use crate::scanner::ScanResults;
+use colored::*;
 
 /// Formatter for console output.
 pub struct ConsoleFormatter;
@@ -131,7 +127,7 @@ impl ConsoleFormatter {
     pub fn print_analysis_results(results: &AnalysisResults) {
         println!("{}", "System PATH Analysis".bold().cyan());
         println!();
-        let misplaced: Vec<_> = results
+        let misplaced: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| e.should_be_in_user_path())
@@ -157,7 +153,7 @@ impl ConsoleFormatter {
             }
             println!();
         }
-        let unquoted_system: Vec<_> = results
+        let unquoted_system: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| {
@@ -174,7 +170,7 @@ impl ConsoleFormatter {
             }
             println!();
         }
-        let unquoted_user: Vec<_> = results
+        let unquoted_user: Vec<&PathEntry> = results
             .entries
             .iter()
             .filter(|e| matches!(e.location, PathLocation::User) && e.needs_quotes())
@@ -188,7 +184,7 @@ impl ConsoleFormatter {
             println!();
         }
         let mut seen = std::collections::HashSet::new();
-        let mut duplicates = Vec::new();
+        let mut duplicates: Vec<&PathEntry> = Vec::new();
         for entry in &results.entries {
             let normalized = entry.path.trim_matches('"').to_lowercase();
             if !seen.insert(normalized.clone()) {
