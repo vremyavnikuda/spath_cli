@@ -1,5 +1,6 @@
-//! Унифицированные модели данных для spath-cli.
-use crate::constants::{MAX_SINGLE_PATH_LENGTH, USER_PATHS};
+//! Unified data models for spath-cli.
+use crate::constants::MAX_SINGLE_PATH_LENGTH;
+use crate::utils::categorize_path;
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -106,7 +107,7 @@ impl PathEntry {
         let exists = Path::new(trimmed).exists();
         let has_spaces = trimmed.contains(' ');
         let is_quoted = path.starts_with('"') && path.ends_with('"');
-        let category = Self::categorize(trimmed);
+        let category = categorize_path(trimmed);
         let normalized = trimmed.to_lowercase();
         let is_duplicate = all_paths
             .iter()
@@ -123,22 +124,6 @@ impl PathEntry {
             is_quoted,
             is_duplicate,
         }
-    }
-    pub fn categorize(path: &str) -> PathCategory {
-        let lower = path.to_lowercase();
-        if lower.starts_with("c:\\windows")
-            || lower.starts_with("c:\\program files")
-            || lower.starts_with("c:\\program files (x86)")
-        {
-            return PathCategory::SystemProgram;
-        }
-        if lower.contains("\\users\\") || USER_PATHS.iter().any(|p| lower.contains(p)) {
-            return PathCategory::UserProgram;
-        }
-        if lower.starts_with("c:\\programdata") {
-            return PathCategory::ProgramData;
-        }
-        PathCategory::Ambiguous
     }
     pub fn should_be_in_user_path(&self) -> bool {
         matches!(self.category, PathCategory::UserProgram)
